@@ -7,7 +7,6 @@ find_package(catkin REQUIRED COMPONENTS
   rosinterface
   std_msgs
   sensor_msgs
-  rosinterface
   fastvirtualscan
   message_generation
   cv_bridge
@@ -105,7 +104,6 @@ add_dependencies(points2vscan
 
 target_link_libraries(points2vscan
   ${catkin_LIBRARIES}
-  rosinterface
   nlopt
   ${Qt5Core_LIBRARIES}
   ${Qt5Widgets_LIBRARIES}

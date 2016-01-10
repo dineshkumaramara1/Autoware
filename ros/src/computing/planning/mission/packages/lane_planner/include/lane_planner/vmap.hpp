@@ -43,7 +43,7 @@
 #include <map_file/Node.h>
 #include <map_file/StopLine.h>
 #include <map_file/DTLane.h>
-#include <tablet_socket/route_cmd.h>
+#include <tablet_socket_msgs/route_cmd.h>
 #include <waypoint_follower/dtlane.h>
 #include <waypoint_follower/lane.h>
 
@@ -86,7 +86,7 @@ map_file::DTLane create_map_file_dtlane(const waypoint_follower::dtlane& wd);
 
 VectorMap create_lane_vmap(const VectorMap& vmap, int lno);
 VectorMap create_coarse_vmap_from_lane(const waypoint_follower::lane& lane);
-VectorMap create_coarse_vmap_from_route(const tablet_socket::route_cmd& route);
+VectorMap create_coarse_vmap_from_route(const tablet_socket_msgs::route_cmd& route);
 VectorMap create_fine_vmap(const VectorMap& lane_vmap, int lno, const VectorMap& coarse_vmap, double search_radius,
 			   int waypoint_max);
 

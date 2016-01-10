@@ -52,7 +52,7 @@ ros::Publisher waypoint_pub;
 
 lane_planner::vmap::VectorMap all_vmap;
 lane_planner::vmap::VectorMap lane_vmap;
-tablet_socket::route_cmd cached_route;
+tablet_socket_msgs::route_cmd cached_route;
 
 std::vector<std::string> split(const std::string& str, char delim)
 {
@@ -92,7 +92,7 @@ int count_lane(const lane_planner::vmap::VectorMap& vmap)
 	return lcnt;
 }
 
-void create_waypoint(const tablet_socket::route_cmd& msg)
+void create_waypoint(const tablet_socket_msgs::route_cmd& msg)
 {
 	std_msgs::Header header;
 	header.stamp = ros::Time::now();

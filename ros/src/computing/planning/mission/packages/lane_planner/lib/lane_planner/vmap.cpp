@@ -33,7 +33,7 @@
 
 #include <ros/console.h>
 
-#include <tablet_socket/Waypoint.h>
+#include <tablet_socket_msgs/Waypoint.h>
 
 #include <geo_pos_conv.hh>
 #include <lane_planner/vmap.hpp>
@@ -581,13 +581,13 @@ VectorMap create_coarse_vmap_from_lane(const waypoint_follower::lane& lane)
 	return coarse_vmap;
 }
 
-VectorMap create_coarse_vmap_from_route(const tablet_socket::route_cmd& route)
+VectorMap create_coarse_vmap_from_route(const tablet_socket_msgs::route_cmd& route)
 {
 	geo_pos_conv geo;
 	geo.set_plane(7);
 
 	VectorMap coarse_vmap;
-	for (const tablet_socket::Waypoint& w : route.point) {
+	for (const tablet_socket_msgs::Waypoint& w : route.point) {
 		geo.llh_to_xyz(w.lat, w.lon, 0);
 
 		map_file::PointClass p;

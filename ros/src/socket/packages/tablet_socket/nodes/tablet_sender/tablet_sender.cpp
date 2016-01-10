@@ -36,9 +36,9 @@
 #include <ros/console.h>
 
 #include <std_msgs/Bool.h>
-#include <tablet_socket/error_info.h>
-#include <tablet_socket/mode_info.h>
-#include <vehicle_socket/CanInfo.h>
+#include <tablet_socket_msgs/error_info.h>
+#include <tablet_socket_msgs/mode_info.h>
+#include <vehicle_socket_msgs/CanInfo.h>
 #include <ndt_localizer/ndt_stat.h>
 
 static constexpr int DEFAULT_PORT = 5777;
@@ -61,7 +61,7 @@ struct error_request {
 	int32_t type;
 	int32_t error;
 
-	error_request(const tablet_socket::error_info& msg)
+	error_request(const tablet_socket_msgs::error_info& msg)
 	: type(ERROR_INFO_TYPE), error(msg.error) {
 	}
 };
@@ -70,7 +70,7 @@ struct can_request {
 	int32_t type;
 	int32_t driveshift;
 
-	can_request(const vehicle_socket::CanInfo& msg)
+	can_request(const vehicle_socket_msgs::CanInfo& msg)
 	: type(CAN_INFO_TYPE), driveshift(msg.driveshift) {
 	}
 };
@@ -79,7 +79,7 @@ struct mode_request {
 	int32_t type;
 	int32_t mode;
 
-	mode_request(const tablet_socket::mode_info& msg)
+	mode_request(const tablet_socket_msgs::mode_info& msg)
 	: type(MODE_INFO_TYPE), mode(msg.mode) {
 	}
 };
@@ -114,7 +114,7 @@ struct lf_request {
 	}
 };
 
-static void subscribe_error_info(const tablet_socket::error_info& msg)
+static void subscribe_error_info(const tablet_socket_msgs::error_info& msg)
 {
 	error_request request(msg);
 	int response;
@@ -147,7 +147,7 @@ static void subscribe_error_info(const tablet_socket::error_info& msg)
 	}
 }
 
-static void subscribe_can_info(const vehicle_socket::CanInfo& msg)
+static void subscribe_can_info(const vehicle_socket_msgs::CanInfo& msg)
 {
 	can_request request(msg);
 	int response;
@@ -180,7 +180,7 @@ static void subscribe_can_info(const vehicle_socket::CanInfo& msg)
 	}
 }
 
-static void subscribe_mode_info(const tablet_socket::mode_info& msg)
+static void subscribe_mode_info(const tablet_socket_msgs::mode_info& msg)
 {
 	mode_request request(msg);
 	int response;

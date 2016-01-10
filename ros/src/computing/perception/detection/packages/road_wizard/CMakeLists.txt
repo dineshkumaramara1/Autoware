@@ -46,11 +46,6 @@ generate_messages(DEPENDENCIES
 ###################################
 ## catkin specific configuration ##
 ###################################
-include_directories(
-	${catkin_INCLUDE_DIRS}
-	${EIGEN3_INCLUDE_DIRS}
-)
-
 catkin_package(
   INCLUDE_DIRS ${EIGEN3_INCLUDE_DIRS}
   CATKIN_DEPENDS std_msgs message_runtime libvectormap runtime_manager
@@ -80,7 +75,7 @@ road_wizard_generate_messages_cpp)
 ### feat_proj ###
 include_directories(
   ${catkin_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIR}
+  ${EIGEN3_INCLUDE_DIRS}
   ${libvectormap_INCLUDE_DIRS}
 )
 

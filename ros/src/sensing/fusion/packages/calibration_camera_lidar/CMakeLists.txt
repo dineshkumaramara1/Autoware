@@ -36,7 +36,7 @@ catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES camera
    CATKIN_DEPENDS glviewer rosinterface
-#  DEPENDS system_lib
+  DEPENDS calibration_camera_lidar_generate_messages_cpp
 )
 
 set(CMAKE_CXX_FLAGS "-std=c++11 -O2 -Wall -g -Wno-unused-result ${CMAKE_CXX_FLAGS}")
@@ -94,8 +94,6 @@ add_dependencies(calibrationtoolkit
 target_link_libraries(calibrationtoolkit
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
-  glviewer
-  rosinterface
   nlopt
   ${Qt5Core_LIBRARIES}
   ${Qt5Widgets_LIBRARIES}
@@ -172,8 +170,6 @@ add_dependencies(calibration_toolkit
 target_link_libraries(calibration_toolkit
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
-  glviewer
-  rosinterface
   calibrationtoolkit
   glut
   GLU

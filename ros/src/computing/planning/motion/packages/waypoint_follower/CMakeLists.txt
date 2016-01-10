@@ -37,8 +37,7 @@ generate_messages(
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES libwaypoint_follower
-  CATKIN_DEPENDS roscpp std_msgs tf runtime_manager
-  DEPENDS gnss
+  CATKIN_DEPENDS roscpp std_msgs tf runtime_manager gnss
 )
 
 ###########
@@ -58,7 +57,7 @@ waypoint_follower_generate_messages_cpp
 runtime_manager_generate_messages_cpp)
 
 add_executable(pure_pursuit nodes/pure_pursuit/pure_pursuit.cpp)
-target_link_libraries(pure_pursuit gnss libwaypoint_follower ${catkin_LIBRARIES})
+target_link_libraries(pure_pursuit libwaypoint_follower ${catkin_LIBRARIES})
 add_dependencies(pure_pursuit 
 waypoint_follower_generate_messages_cpp
 runtime_manager_generate_messages_cpp)

@@ -1,6 +1,6 @@
 #include <ros/ros.h>
-#include <cv_tracker/obj_label.h>
-#include <lidar_tracker/centroids.h>
+#include <cv_tracker_msgs/obj_label.h>
+#include <lidar_tracker_msgs/centroids.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <geometry_msgs/Point.h>
@@ -30,7 +30,7 @@ static double euclid_distance(const geometry_msgs::Point pos1,
 } /* static double distance() */
 
 
-void obj_label_cb(const cv_tracker::obj_label& obj_label_msg)
+void obj_label_cb(const cv_tracker_msgs::obj_label& obj_label_msg)
 {
     object_type = obj_label_msg.type;
     reprojected_positions.clear();
@@ -49,7 +49,7 @@ void obj_label_cb(const cv_tracker::obj_label& obj_label_msg)
 } /* void obj_label_cb() */
 
 
-void cluster_centroids_cb(const lidar_tracker::centroids& cluster_centroids_msg)
+void cluster_centroids_cb(const lidar_tracker_msgs::centroids& cluster_centroids_msg)
 {
     std::vector<geometry_msgs::Point> centroids;
 

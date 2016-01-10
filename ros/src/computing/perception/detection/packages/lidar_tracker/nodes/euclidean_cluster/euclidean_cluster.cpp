@@ -21,7 +21,7 @@
 #include <pcl/common/common.h>
 
 #include <visualization_msgs/Marker.h>
-#include <lidar_tracker/centroids.h>
+#include <lidar_tracker_msgs/centroids.h>
 
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
@@ -147,7 +147,7 @@ void cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
 	int j = 0;
 	unsigned int k = 0;
 
-	lidar_tracker::centroids centroids;
+	lidar_tracker_msgs::centroids centroids;
 
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr final_cluster (new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -235,7 +235,7 @@ int main (int argc, char** argv)
 	cv::generateColors(_colors, 100);
 
 	pub = h.advertise<sensor_msgs::PointCloud2>("/points_cluster",1);
-	centroid_pub = h.advertise<lidar_tracker::centroids>("/cluster_centroids",1);
+	centroid_pub = h.advertise<lidar_tracker_msgs::centroids>("/cluster_centroids",1);
 	marker_pub = h.advertise<visualization_msgs::Marker>("centroid_marker",1);
 
 

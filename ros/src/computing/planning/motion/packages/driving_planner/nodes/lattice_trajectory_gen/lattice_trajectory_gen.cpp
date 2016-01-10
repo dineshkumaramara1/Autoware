@@ -52,7 +52,7 @@
 #include "runtime_manager/ConfigWaypointFollower.h"
 #include "waypoint_follower/libwaypoint_follower.h"
 #include "libtraj_gen.h"
-#include "vehicle_socket/CanInfo.h"
+#include "vehicle_socket_msgs/CanInfo.h"
 //#include <dbw_mkz_msgs/SteeringReport.h>
 
 
@@ -186,7 +186,7 @@ static double getLookAheadThreshold(int waypoint)
     return current_velocity_mps * g_look_ahead_threshold_calc_ratio;
 }
 
-static void canInfoCallback(const vehicle_socket::CanInfoConstPtr &msg)
+static void canInfoCallback(const vehicle_socket_msgs::CanInfoConstPtr &msg)
 {
   double steering_wheel_angle = msg->angle;
   g_current_velocity = (msg->speed)*(1000.00/3600);

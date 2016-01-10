@@ -6,7 +6,7 @@
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
-#include <cv_tracker/image_obj.h>
+#include <cv_tracker_msgs/image_obj.h>
 #include <runtime_manager/ConfigCarDpm.h>
 
 #include <dpm_ocv.hpp>
@@ -133,7 +133,7 @@ void objectDetect::run()
 	config_topic += ros::this_node::getNamespace() + "/dpm";
 	config_sub_ = nh_.subscribe<runtime_manager::ConfigCarDpm>(config_topic, 1, &objectDetect::configCallback, this);
 	img_sub_ = nh_.subscribe<sensor_msgs::Image>("/image_raw", 1, &objectDetect::imageCallback, this);
-	detect_pub_ = nh_.advertise<cv_tracker::image_obj>("image_obj", 1);
+	detect_pub_ = nh_.advertise<cv_tracker_msgs::image_obj>("image_obj", 1);
 }
 
 // Callback
@@ -162,14 +162,14 @@ void objectDetect::imageCallback(const sensor_msgs::ImageConstPtr& img)
 	std::vector<int> corner_point_array(num * 4.0);
 	std::vector<int> type_array(num, 0);
 
-	cv_tracker::image_obj msg;
+	cv_tracker_msgs::image_obj msg;
 	msg.header = img->header;
 	msg.type = object_class;
 
 	for(size_t i = 0; i < detections.size(); i++)
 	{
 		const cv::LatentSvmDetector::ObjectDetection& od = detections[i];
-		cv_tracker::image_rect rect;
+		cv_tracker_msgs::image_rect rect;
 
 		type_array[i] = od.classID;
 		rect.x = od.rect.x;

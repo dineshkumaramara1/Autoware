@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   message_generation
+  calibration_camera_lidar
 )
 find_package(OpenCV REQUIRED)
 

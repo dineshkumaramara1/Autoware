@@ -1,8 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(cv_tracker)
 
-include(FindPkgConfig)
-FIND_PACKAGE(catkin REQUIRED COMPONENTS
+find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
   roscpp
@@ -13,10 +12,13 @@ FIND_PACKAGE(catkin REQUIRED COMPONENTS
   libdpm_ttic
   fusion
   kf
+  cv_tracker_msgs
 )
-FIND_PACKAGE(CUDA)
-FIND_PACKAGE(OpenCV REQUIRED)
 
+find_package(CUDA)
+find_package(OpenCV REQUIRED)
+
+include(FindPkgConfig)
 pkg_check_modules(HDF5 hdf5)
 
 EXECUTE_PROCESS(
@@ -25,24 +27,8 @@ EXECUTE_PROCESS(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-add_message_files(
-  FILES
-  image_obj.msg
-  image_obj_ranged.msg
-  image_obj_tracked.msg
-  image_rect.msg
-  image_rect_ranged.msg
-  obj_label.msg
-)
-
-generate_messages(
-  DEPENDENCIES
-  std_msgs
-  geometry_msgs
-)
-
 catkin_package(
-  CATKIN_DEPENDS libdpm_ocv libdpm_ttic scan2image fusion kf
+  CATKIN_DEPENDS libdpm_ocv libdpm_ttic scan2image fusion kf cv_tracker_msgs
 )
 
 ###########
@@ -75,7 +61,6 @@ ADD_EXECUTABLE(dpm_ttic
 TARGET_LINK_LIBRARIES(dpm_ttic
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
-  libdpm_ttic
 )
 
 IF(CUDA_FOUND)
@@ -105,7 +90,6 @@ ADD_EXECUTABLE(dpm_ocv
 )
 
 TARGET_LINK_LIBRARIES(dpm_ocv
-  libdpm_ocv
   ${catkin_LIBRARIES}
   #${OpenCV_LIBS}
 )
@@ -139,12 +123,8 @@ ADD_EXECUTABLE(range_fusion
 TARGET_LINK_LIBRARIES(range_fusion
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
-  fusion
 )
 
-ADD_DEPENDENCIES(range_fusion
-  cv_tracker_generate_messages_cpp
-)
 
 ## kf_tracker ##
 ADD_EXECUTABLE(kf_track
@@ -154,7 +134,6 @@ ADD_EXECUTABLE(kf_track
 TARGET_LINK_LIBRARIES(kf_track
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
-  kf
 )
 
 ADD_DEPENDENCIES(kf_track
@@ -189,9 +168,7 @@ ADD_LIBRARY(lktracker
 TARGET_LINK_LIBRARIES(lktracker
   ${OpenCV_LIBS}
 )
-ADD_DEPENDENCIES(lktracker
-  cv_tracker_generate_messages_cpp
-)
+
 
 TARGET_LINK_LIBRARIES(klt_track
   lktracker

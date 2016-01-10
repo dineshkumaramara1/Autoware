@@ -26,7 +26,7 @@
  */
 
 #include <ros/ros.h>
-#include <cv_tracker/image_obj_ranged.h>
+#include <cv_tracker_msgs/image_obj_ranged.h>
 #include <std_msgs/Header.h>
 #include <fusion_func.h>
 #include <runtime_manager/ConfigCarFusion.h>
@@ -37,7 +37,7 @@ static std_msgs::Header sensor_header;
 
 static bool ready_;
 
-static void DetectedObjectsCallback(const cv_tracker::image_obj& image_object)
+static void DetectedObjectsCallback(const cv_tracker_msgs::image_obj& image_object)
 {
 	ready_ = false;
 	setDetectedObjects(image_object);
@@ -71,7 +71,7 @@ static void publishTopic()
 	/*
 	 * Publish topic(obj position ranged).
 	 */
-	cv_tracker::image_obj_ranged fused_objects_msg;
+	cv_tracker_msgs::image_obj_ranged fused_objects_msg;
 	fused_objects_msg.header = sensor_header;
 
 	fused_objects_msg.type = getObjectsType();
@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 #if _DEBUG
 	ros::Subscriber image_sub = n.subscribe(IMAGE_TOPIC, 1, IMAGE_CALLBACK);
 #endif
-	fused_objects = n.advertise<cv_tracker::image_obj_ranged>("image_obj_ranged", 1);
+	fused_objects = n.advertise<cv_tracker_msgs::image_obj_ranged>("image_obj_ranged", 1);
 
 	ros::Subscriber config_subscriber;
 	std::string config_topic("/config");

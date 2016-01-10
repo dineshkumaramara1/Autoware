@@ -40,14 +40,14 @@
 
 #include <fstream>
 
-#include "vehicle_socket/CanInfo.h"
+#include "vehicle_socket_msgs/CanInfo.h"
 #include "waypoint_follower/libwaypoint_follower.h"
 
 static const int SYNC_FRAMES = 10;
 static const int ZMP_CAN = 1;
 static const int NDT = 2;
 
-typedef message_filters::sync_policies::ApproximateTime<vehicle_socket::CanInfo, geometry_msgs::PoseStamped> CaninfoPoseSync;
+typedef message_filters::sync_policies::ApproximateTime<vehicle_socket_msgs::CanInfo, geometry_msgs::PoseStamped> CaninfoPoseSync;
 typedef message_filters::sync_policies::ApproximateTime<geometry_msgs::TwistStamped, geometry_msgs::PoseStamped> TwistPoseSync;
 
 class WaypointSaver
@@ -59,7 +59,7 @@ public:
 private:
 
   //functions
-  void CaninfoPoseCallback(const vehicle_socket::CanInfoConstPtr &can_msg, const geometry_msgs::PoseStampedConstPtr &pose_msg) const;
+  void CaninfoPoseCallback(const vehicle_socket_msgs::CanInfoConstPtr &can_msg, const geometry_msgs::PoseStampedConstPtr &pose_msg) const;
   void TwistPoseCallback(const geometry_msgs::TwistStampedConstPtr &twist_msg, const geometry_msgs::PoseStampedConstPtr &pose_msg) const;
   void FloatPoseCallback(const std_msgs::Float32ConstPtr &float_msg, const geometry_msgs::PoseStampedConstPtr &pose_msg) const;
   void poseCallback(const geometry_msgs::PoseStampedConstPtr &pose_msg) const;
@@ -74,7 +74,7 @@ private:
   ros::Publisher waypoint_saver_pub_;
 
   //subscriber
-  message_filters::Subscriber<vehicle_socket::CanInfo> *zmp_can_sub_;
+  message_filters::Subscriber<vehicle_socket_msgs::CanInfo> *zmp_can_sub_;
  // message_filters::Subscriber<geometry_msgs::TwistStamped> *ndt_estimated_sub_;
   message_filters::Subscriber<geometry_msgs::TwistStamped> *ndt_estimated_sub_;
   message_filters::Subscriber<geometry_msgs::PoseStamped> *pose_sub_;
@@ -101,7 +101,7 @@ WaypointSaver::WaypointSaver() :
 
   if (velocity_source_ == ZMP_CAN) // ZMP CAN
   {
-    zmp_can_sub_ = new message_filters::Subscriber<vehicle_socket::CanInfo>(nh_, "can_info", 1);
+    zmp_can_sub_ = new message_filters::Subscriber<vehicle_socket_msgs::CanInfo>(nh_, "can_info", 1);
     sync_cp_ = new message_filters::Synchronizer<CaninfoPoseSync>(CaninfoPoseSync(SYNC_FRAMES), *zmp_can_sub_,
         *pose_sub_);
     sync_cp_->registerCallback(boost::bind(&WaypointSaver::CaninfoPoseCallback, this, _1, _2));
@@ -139,7 +139,7 @@ void WaypointSaver::poseCallback (
   outputProcessing(pose_msg->pose,0);
 }
 
-void WaypointSaver::CaninfoPoseCallback(const vehicle_socket::CanInfoConstPtr &can_msg,
+void WaypointSaver::CaninfoPoseCallback(const vehicle_socket_msgs::CanInfoConstPtr &can_msg,
   const geometry_msgs::PoseStampedConstPtr &pose_msg) const
 {
   outputProcessing(pose_msg->pose,can_msg->speed);

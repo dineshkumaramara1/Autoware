@@ -55,7 +55,7 @@
 #include <geometry_msgs/Pose.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-#include <cv_tracker/image_obj_tracked.h>
+#include <cv_tracker_msgs/image_obj_tracked.h>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 #include <sensor_msgs/NavSatFix.h>
@@ -64,7 +64,7 @@
 #include "axialMove.h"
 #include "geo_pos_conv.hh"
 #include "CalObjLoc.h"
-#include "cv_tracker/obj_label.h"
+#include "cv_tracker_msgs/obj_label.h"
 #include "calibration_camera_lidar/projection_matrix.h"
 
 #define XSTR(x) #x
@@ -152,7 +152,7 @@ void makeSendDataDetectedObj(vector<OBJPOS> car_position_vector,
                              vector<OBJPOS>::iterator cp_iterator,
                              LOCATION mloc,
                              ANGLE angle,
-                             cv_tracker::obj_label& send_data)
+                             cv_tracker_msgs::obj_label& send_data)
 {
   LOCATION rescoord;
   geometry_msgs::Point tmpPoint;
@@ -204,7 +204,7 @@ void locatePublisher(vector<OBJPOS> car_position_vector){
   //and send database server.
   
   //  geometry_msgs::PoseArray pose_msg;
-  cv_tracker::obj_label obj_label_msg;
+  cv_tracker_msgs::obj_label obj_label_msg;
 
   vector<OBJPOS>::iterator cp_iterator;
   LOCATION mloc;
@@ -243,7 +243,7 @@ void locatePublisher(vector<OBJPOS> car_position_vector){
    //   }
 }
 
-static void obj_pos_xyzCallback(const cv_tracker::image_obj_tracked& fused_objects)
+static void obj_pos_xyzCallback(const cv_tracker_msgs::image_obj_tracked& fused_objects)
 {
 	if (!ready_)
 		return;
@@ -334,7 +334,7 @@ int main(int argc, char **argv){
   */
   //ros::Subscriber gnss_pose = n.subscribe("/gnss_pose", 1, position_getter_gnss);
   ros::Subscriber ndt_pose = n.subscribe("/current_pose", 1, position_getter_ndt);
-  pub = n.advertise<cv_tracker::obj_label>("obj_label",1); 
+  pub = n.advertise<cv_tracker_msgs::obj_label>("obj_label",1); 
 
   ros::Subscriber projection = n.subscribe("/projection_matrix", 1, projection_callback);
 
@@ -368,7 +368,7 @@ int main(int argc, char **argv){
 /*  std::string lidar_3d_yaml = "";
 
   if (private_nh.getParam("lidar_3d_yaml", lidar_3d_yaml) == false) {
-      std::cerr << "error! usage : rosrun  cv_tracker obj_reproj _lidar_3d_yaml:=[file]" << std::endl;
+      std::cerr << "error! usage : rosrun  cv_tracker_msgs obj_reproj _lidar_3d_yaml:=[file]" << std::endl;
       exit(-1);
   }
 

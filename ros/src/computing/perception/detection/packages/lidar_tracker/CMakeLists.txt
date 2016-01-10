@@ -11,6 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   message_generation
   tf
+  cv_tracker_msgs
+  lidar_tracker_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -46,12 +48,7 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -O2 -Wall ${CMAKE_CXX_FLAGS}")
 ##   * uncomment the generate_messages entry below
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
-## Generate messages in the 'msg' folder
- add_message_files(
-   FILES
-   centroids.msg
 
- )
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -67,12 +64,6 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -O2 -Wall ${CMAKE_CXX_FLAGS}")
 #   Action2.action
 # )
 
-## Generate added messages and services with any dependencies listed here
- generate_messages(
-   DEPENDENCIES
-   std_msgs 
-   geometry_msgs
- )
 
 ###################################
 ## catkin specific configuration ##
@@ -86,7 +77,7 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -O2 -Wall ${CMAKE_CXX_FLAGS}")
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES lidar_tracker
-#  CATKIN_DEPENDS pcl_conversions pcl_ros roscpp sensor_msgs
+  CATKIN_DEPENDS lidar_tracker_msgs
 #  DEPENDS system_lib
 )
 

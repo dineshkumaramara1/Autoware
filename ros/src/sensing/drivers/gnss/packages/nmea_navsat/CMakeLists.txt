@@ -6,12 +6,12 @@ project(nmea_navsat)
 #  std_msgs
 #)
 
-catkin_package(
+#catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES fake_drivers
 #  CATKIN_DEPENDS other_catkin_pkg
 #  DEPENDS system_lib
-)
+#)
 
 ###########
 ## Build ##

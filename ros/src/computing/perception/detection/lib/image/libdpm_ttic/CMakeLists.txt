@@ -17,7 +17,7 @@ EXECUTE_PROCESS(
 
 catkin_package(
   INCLUDE_DIRS include/dpm_ttic
-  LIBRARIES libdpm_ttic
+  LIBRARIES dpm_ttic
 )
 
 SET(CMAKE_C_FLAGS "-O2 -g -Wall -Wno-unused-result -DROS ${CMAKE_C_FLAGS}")
@@ -131,7 +131,7 @@ ADD_DEPENDENCIES(libdpm_ttic
   runtime_manager_generate_messages_cpp)
 
 ENDIF()
-
+SET_TARGET_PROPERTIES(libdpm_ttic PROPERTIES OUTPUT_NAME dpm_ttic)
 #############
 ## Install ##
 #############
