@@ -931,7 +931,9 @@ int main(int argc, char **argv)
         }
 
 	_closest_waypoint = getClosestWaypoint(_path_change.getCurrentWaypoints(), _current_pose.pose);
-	closest_waypoint_pub.publish(_closest_waypoint);
+	std_msgs::Int32 _closest_waypoint_msg;
+	_closest_waypoint_msg.data=_closest_waypoint;
+	closest_waypoint_pub.publish(_closest_waypoint_msg);
 
 	vmap.setDetectionWaypoint(FindCrossWalk());
 
