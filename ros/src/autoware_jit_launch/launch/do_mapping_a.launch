@@ -39,27 +39,7 @@ leaf_size: 5.0"
   <arg name="min_range" default="2.4" />
   <arg name="max_range" default="130.0" />
 
-  <arg name="tf_x" default="1.77" />
-  <arg name="tf_y" default="0.010" />
-  <arg name="tf_z" default="1.52" />
-  <arg name="tf_yaw" default="0.0" />
-  <arg name="tf_pitch" default="0.13" />
-  <arg name="tf_roll" default="0.0" />
 
-  <param name="tf_x" value="$(arg tf_x)" />
-  <param name="tf_y" value="$(arg tf_y)" />
-  <param name="tf_z" value="$(arg tf_z)" />
-  <param name="tf_yaw" value="$(arg tf_yaw)" />
-  <param name="tf_pitch" value="$(arg tf_pitch)" />
-  <param name="tf_roll" value="$(arg tf_roll)" />
-
-<!--
-<include file="$(find runtime_manager)/scripts/setup_tf.launch" />
--->
-  <node pkg="tf2_ros" type="static_transform_publisher" name="baselink_to_velodyne"         args="$(arg tf_x) $(arg tf_y) $(arg tf_z) $(arg tf_yaw) $(arg tf_pitch) $(arg tf_roll)  /base_link /velodyne " />
-  <include file="$(find model_publisher)/launch/vehicle_model.launch" >
-    <arg name="model_path" default="$(find scu_data)/3d_model/golf_cart1/golf_cart1.urdf" />
-  </include>
 
   <!--data play -->
     <!--
@@ -89,23 +69,6 @@ leaf_size: 5.0"
       </include>
 
 
-  <!-- mapping -->
-  <!-- ndt_localizer ndt_mapping.launch -->
-    <!-- send table.xml to param server -->
-    <arg name="range" default="5.0" /> <!-- min range for mapping -->
-    <arg name="shift" default="1.0" /><!-- min pos shift required to add to map -->
-    <arg name="use_openmp" default="true" /><!-- parallel -->
-
-    <!-- rosrun ndt_localizer ndt_mapping  -->
-    <node pkg="ndt_localizer" type="queue_counter" name="queue_counter" output="screen" />
-    <node pkg="ndt_localizer" type="ndt_mapping" name="ndt_mapping" output="screen">
-      <param name="range" value="$(arg range)" />
-      <param name="shift" value="$(arg shift)" />
-      <param name="use_openmp" value="$(arg use_openmp)" />
-      <remap from="/points_raw" to="/velodyne_points" />
-    </node>
-
-    <node name="config" pkg="autoware_jit_launch" type="mapping_config.sh" />
 
     <!-- rviz visualization-->
 <!--

@@ -33,11 +33,6 @@ leaf_size: 5.0"
   <param name="use_sim_time" value="true"/>
 -->
 
-  <arg name="rviz_file" default="$(find autoware_jit_launch)/rviz/mapping.rviz" />
-  <arg name="pcap" default="/media/Data/BAGFILES/ForSlam2016_06/2016_06_03_scu_routeA/pcap-000.pcap" />
-  <arg name="calibration" default="$(find velodyne_pointcloud)/params/VLP16db.yaml"/>
-  <arg name="min_range" default="2.4" />
-  <arg name="max_range" default="130.0" />
 
   <arg name="tf_x" default="1.77" />
   <arg name="tf_y" default="0.010" />
@@ -61,32 +56,6 @@ leaf_size: 5.0"
     <arg name="model_path" default="$(find scu_data)/3d_model/golf_cart1/golf_cart1.urdf" />
   </include>
 
-  <!--data play -->
-    <!--
-      <node pkg="rosbag" type="play" name="rosbag" args=" _ _ clock  8tags.bag"/>
-    -->
-<!--
-    OR rosrun velodyne_driver velodyne_node _mol:=VLP16 _pcap:=/media/Data/BAGFILES/ForSlam2016_06/2016_06_03_scu_fast_shuttles_pcap/pcap/pcap-000 _read_once:=true
--->
-      <!-- start nodelet manager and driver nodelets -->
-      <include file="$(find velodyne_driver)/launch/nodelet_manager.launch">
-        <arg name="model" value="VLP16"/>
-        <arg name="read_once" value="true"/>
-        <arg name="rpm" value="600"/>
-        <arg name="frame_id" value="velodyne"/>
-        <arg name="pcap" value="$(arg pcap)"/>
-      </include>
-
-      <!-- start cloud nodelet -->
-      <include file="$(find velodyne_pointcloud)/launch/cloud_nodelet.launch">
-        <arg name="calibration" value="$(arg calibration)"/>
-        <arg name="min_range" value="$(arg min_range)"/>
-        <arg name="max_range" value="$(arg max_range)"/>
-<!--
-        <arg name="view_direction" value="0.0"/>
-        <arg name="view_width" value="6.28318530718"/>
--->
-      </include>
 
 
   <!-- mapping -->
@@ -107,9 +76,4 @@ leaf_size: 5.0"
 
     <node name="config" pkg="autoware_jit_launch" type="mapping_config.sh" />
 
-    <!-- rviz visualization-->
-<!--
-    <param name="robot_description" textfile="$(find scu_data)/3d_model/golf_cart1/golf_cart1.urdf"/>
--->
-    <node pkg="rviz" type="rviz" name="$(anon rviz)" args="-d $(arg rviz_file)" output="screen" />
 </launch>
