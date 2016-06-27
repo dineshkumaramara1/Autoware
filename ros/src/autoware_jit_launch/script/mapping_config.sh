@@ -6,4 +6,4 @@ rostopic pub /config/ndt_mapping runtime_manager/ConfigNdtMapping "header:
 resolution: 1.0
 step_size: 0.1
 trans_eps: 0.01
-leaf_size: 5.0"
+leaf_size: 2.0"

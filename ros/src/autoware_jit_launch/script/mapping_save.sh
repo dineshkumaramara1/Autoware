@@ -6,4 +6,4 @@ rostopic pub /config/ndt_mapping_output runtime_manager/ConfigNdtMappingOutput "
     nsecs: 0
   frame_id: ''
 filename: '/media/fast_data/ros_sandbox/Autoware/ros/out.pcd'
-filter_res: 0.0"
+filter_res: 0.5"
