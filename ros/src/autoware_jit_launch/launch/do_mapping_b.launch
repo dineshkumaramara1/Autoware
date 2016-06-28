@@ -66,8 +66,10 @@ leaf_size: 5.0"
     <arg name="use_openmp" default="true" /><!-- parallel -->
 
     <!-- rosrun ndt_localizer ndt_mapping  -->
-    <node pkg="ndt_localizer" type="queue_counter" name="queue_counter" output="screen" />
-    <node pkg="ndt_localizer" type="ndt_mapping" name="ndt_mapping" output="screen">
+    <node pkg="ndt_localizer" type="queue_counter" name="queue_counter" output="screen"  >
+     <remap from="/points_raw" to="/velodyne_points" />
+    </node>
+    <node pkg="ndt_localizer" type="ndt_mapping" name="ndt_mapping" output="screen" launch-prefix="xterm -e gdb --args"  >
       <param name="range" value="$(arg range)" />
       <param name="shift" value="$(arg shift)" />
       <param name="use_openmp" value="$(arg use_openmp)" />
