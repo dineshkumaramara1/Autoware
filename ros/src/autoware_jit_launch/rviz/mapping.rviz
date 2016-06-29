@@ -6,7 +6,6 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /ndt_Map1
       Splitter Ratio: 0.5
     Tree Height: 776
   - Class: rviz/Selection
@@ -27,7 +26,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ndt_Map
+    SyncSource: ""
 Visualization Manager:
   Class: ""
   Displays:
@@ -80,7 +79,7 @@ Visualization Manager:
       Use rainbow: true
       Value: true
     - Alpha: 0.2
-      Autocompute Intensity Bounds: true
+      Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
         Max Value: 10
         Min Value: -10
@@ -99,8 +98,8 @@ Visualization Manager:
       Min Intensity: 0
       Name: ndt_Map
       Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
+      Queue Size: 0
+      Selectable: false
       Size (Pixels): 3
       Size (m): 0.05
       Style: Flat Squares
@@ -109,6 +108,56 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
+    - Class: rviz/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        base_link:
+          Value: true
+        velodyne:
+          Value: true
+      Marker Scale: 50
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        base_link:
+          velodyne:
+            {}
+      Update Interval: 0
+      Value: true
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: ""
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: ndt_refernece_map
+      Position Transformer: ""
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05
+      Style: Flat Squares
+      Topic: /reference_map
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -133,7 +182,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 195.618
+      Distance: 338.529
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
@@ -166,5 +215,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1875
-  X: 45
+  X: 1965
   Y: 24
