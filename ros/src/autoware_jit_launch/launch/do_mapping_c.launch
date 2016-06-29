@@ -67,9 +67,8 @@ leaf_size: 5.0"
 
 
     <!-- rosrun ndt_localizer ndt_mapping  -->
-    <node pkg="ndt_localizer" type="queue_counter" name="queue_counter" output="screen"  launch-prefix="xterm -e" >
+    <node pkg="ndt_localizer" type="queue_counter2" name="queue_counter2" output="screen"  launch-prefix="xterm -e" >
      <remap from="/points_raw" to="/velodyne_points" />
-     <remap from="/ndt_map" to="/reference_map" />
     </node>
     <node pkg="ndt_localizer" type="lazy_ndt_mapping" name="lazy_ndt_mapping" output="screen">
       <param name="range" value="$(arg range)" />

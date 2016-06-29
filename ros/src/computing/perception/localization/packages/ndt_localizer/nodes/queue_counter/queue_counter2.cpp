@@ -43,6 +43,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float32.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <geometry_msgs/PoseStamped.h>
 
 static int enqueue = 0;
 static int dequeue = 0;
@@ -52,7 +53,8 @@ static void points_callback(const sensor_msgs::PointCloud2::ConstPtr& input)
   enqueue++;
 }
 
-static void ndt_map_callback(const sensor_msgs::PointCloud2::ConstPtr& input)
+
+static void current_pose_callback(const geometry_msgs::PoseStamped::ConstPtr& input)
 {
   dequeue++;
 
@@ -63,16 +65,15 @@ static void ndt_map_callback(const sensor_msgs::PointCloud2::ConstPtr& input)
     ROS_INFO_STREAM("(Processed/Input): (" << dequeue << " / " << enqueue << ")" );
 }
 
-
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "queue_counter");
+    ros::init(argc, argv, "queue_counter2");
 
     ros::NodeHandle nh;
     ros::NodeHandle private_nh("~");
 
     ros::Subscriber points_sub = nh.subscribe("points_raw", 100000, points_callback);
-    ros::Subscriber ndt_map_sub = nh.subscribe("ndt_map", 100000, ndt_map_callback);
+    ros::Subscriber current_pose_sub = nh.subscribe("current_pose", 100000, current_pose_callback);
 
     ros::spin();
 
