@@ -37,8 +37,7 @@ set(impl_incs
   "include/fast_pcl/filters/impl/voxel_grid.hpp"
   "include/fast_pcl/filters/impl/voxel_grid_covariance.hpp"
 )
-
-
+    
 include_directories(${PCL_INCLUDE_DIRS} "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 add_library("${LIB_NAME}" ${srcs} ${incs} ${impl_incs})
