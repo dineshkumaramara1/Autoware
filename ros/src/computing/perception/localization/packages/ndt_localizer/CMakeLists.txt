@@ -53,7 +53,7 @@ SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall ${CMAKE_CXX_FLAGS}")
 message(WARNING "NOT DUSE_FAST_PCL" ${PCL_VERSION} )
 ELSE(PCL_VERSION VERSION_LESS "1.7.2")
 SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall -DUSE_FAST_PCL ${CMAKE_CXX_FLAGS}")
-message(WARNING "DUSE_FAST_PCL" ${PCL_VERSION} )
+message(WARNING "USE_FAST_PCL" ${PCL_VERSION} )
 ENDIF(PCL_VERSION VERSION_LESS "1.7.2")
 
 add_executable(ndt_matching nodes/ndt_matching/ndt_matching.cpp)
