@@ -29,9 +29,9 @@ leaf_size: 5.0"
 
 -->
 <launch>
-<!--
+ 
   <param name="use_sim_time" value="true"/>
--->
+ 
 
 
   <arg name="tf_x" default="1.77" />
@@ -53,7 +53,7 @@ leaf_size: 5.0"
 -->
   <node pkg="tf2_ros" type="static_transform_publisher" name="baselink_to_velodyne"         args="$(arg tf_x) $(arg tf_y) $(arg tf_z) $(arg tf_yaw) $(arg tf_pitch) $(arg tf_roll)  /base_link /velodyne " />
   <include file="$(find model_publisher)/launch/vehicle_model.launch" >
-    <arg name="model_path" default="$(find scu_data)/3d_model/golf_cart1/golf_cart1.urdf" />
+    <arg name="model_path" default="$(find autoware_jit_launch)/model/vehicle_model.urdf" />
   </include>
 
 

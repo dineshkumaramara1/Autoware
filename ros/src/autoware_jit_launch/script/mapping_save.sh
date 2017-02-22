@@ -5,5 +5,5 @@ rostopic pub /config/ndt_mapping_output runtime_manager/ConfigNdtMappingOutput "
     secs: 0
     nsecs: 0
   frame_id: ''
-filename: '/media/Data/DiboticsData2016/AURO2016-06-21-20_01.pcd'
+filename: '/data/test.pcd'
 filter_res: 0.1"

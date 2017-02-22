@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?> 
+<launch>
+  <param name="use_sim_time" value="true"/>
+  
+  <node pkg="velodyne_decoder" type="velodyne_decoder_node" name="velodyne_decoder" >
+    <remap from="velodyne_packet" to="sensors/velodyne_packet" />
+    <remap from="velodyne_point_cloud" to="velodyne_points" />
+    <param name="min_range" value="0.3"/>
+    <param name="max_range" value="150"/>
+    <param name="frequency" value="20"/>
+    <param name="publish_point_cloud" value="true"/>
+  </node>
+</launch>
