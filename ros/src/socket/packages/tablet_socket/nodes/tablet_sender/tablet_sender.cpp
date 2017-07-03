@@ -34,11 +34,12 @@
 
 #include <ros/ros.h>
 #include <ros/console.h>
+#include <signal.h>
 
 #include <std_msgs/Bool.h>
 #include <tablet_socket_msgs/error_info.h>
 #include <tablet_socket_msgs/mode_info.h>
-#include <vehicle_socket_msgs/CanInfo.h>
+#include <vehicle_socket/CanInfo.h>
 #include <ndt_localizer/ndt_stat.h>
 
 static constexpr int DEFAULT_PORT = 5777;
@@ -70,7 +71,7 @@ struct can_request {
 	int32_t type;
 	int32_t driveshift;
 
-	can_request(const vehicle_socket_msgs::CanInfo& msg)
+	can_request(const vehicle_socket::CanInfo& msg)
 	: type(CAN_INFO_TYPE), driveshift(msg.driveshift) {
 	}
 };
@@ -147,7 +148,7 @@ static void subscribe_error_info(const tablet_socket_msgs::error_info& msg)
 	}
 }
 
-static void subscribe_can_info(const vehicle_socket_msgs::CanInfo& msg)
+static void subscribe_can_info(const vehicle_socket::CanInfo& msg)
 {
 	can_request request(msg);
 	int response;
@@ -361,6 +362,11 @@ int main(int argc, char **argv)
 						  subscribe_lf_stat);
 
 	ros::Rate loop_rate(SUBSCRIBE_HZ);
+
+	struct sigaction act;
+	sigaction(SIGINT, NULL, &act);
+	act.sa_flags &= ~SA_RESTART;
+	sigaction(SIGINT, &act, NULL);
 
 	while (true) {
 		connfd = accept(listenfd, (struct sockaddr *)nullptr,

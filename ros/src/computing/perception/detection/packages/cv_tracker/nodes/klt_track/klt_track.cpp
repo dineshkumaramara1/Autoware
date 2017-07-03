@@ -45,7 +45,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/objdetect/objdetect.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <opencv2/contrib/contrib.hpp>
+//#include <opencv2/contrib/contrib.hpp>
 #include <opencv2/video/tracking.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 
@@ -59,6 +59,7 @@
 #include <algorithm>
 #include <iterator>
 
+#include "gencolors.cpp"
 
 class RosTrackerApp
 {
@@ -72,14 +73,19 @@ class RosTrackerApp
 
 	bool 				ready_;
 
+	bool				track_ready_;
+	bool				detect_ready_;
+
 	int					num_trackers_;
 
 	std::vector<LkTracker*> obj_trackers_;
-	std::vector<cv::LatentSvmDetector::ObjectDetection> obj_detections_;
+	std::vector<ObjectDetection> obj_detections_;
 
 	std::vector<float> ranges_;
 	std::vector<float> min_heights_;
 	std::vector<float> max_heights_;
+
+	cv_tracker_msgs::image_obj_tracked ros_objects_msg_;//sync
 
 	void Sort(const std::vector<float> in_scores, std::vector<unsigned int>& in_out_indices)
 	{
@@ -116,7 +122,7 @@ class RosTrackerApp
 
 		for(unsigned int i = 0; i< in_out_source.size(); i++)
 		{
-			cv::LatentSvmDetector::ObjectDetection tmp = in_out_source[i]->GetTrackedObject();
+			ObjectDetection tmp = in_out_source[i]->GetTrackedObject();
 			area[i] = tmp.rect.width * tmp.rect.height;
 			if (area[i]>0)
 				is_suppresed[i] = false;
@@ -167,12 +173,25 @@ class RosTrackerApp
 		return ;
 	}
 
+	void publish_if_possible()
+	{
+		if (track_ready_ && detect_ready_)
+		{
+			publisher_tracked_objects_.publish(ros_objects_msg_);
+			track_ready_ = false;
+			detect_ready_ = false;
+		}
+	}
+
 public:
 	void image_callback(const sensor_msgs::Image& image_source)
 	{
 		cv_bridge::CvImagePtr cv_image = cv_bridge::toCvCopy(image_source, sensor_msgs::image_encodings::BGR8);
 		cv::Mat image_track = cv_image->image;
-		cv::LatentSvmDetector::ObjectDetection empty_detection(cv::Rect(0,0,0,0),0,0);
+		
+		ObjectDetection empty_detection;
+		empty_detection.rect=cv::Rect(0,0,0,0);
+		empty_detection.score=0;
 		unsigned int i;
 
 		std::vector<bool> tracker_matched(obj_trackers_.size(), false);
@@ -186,7 +205,7 @@ public:
 				if (tracker_matched[j] || object_matched[i])
 					continue;
 
-				cv::LatentSvmDetector::ObjectDetection tmp_detection = obj_detections_[i];
+				ObjectDetection tmp_detection = obj_detections_[i];
 				int area = tmp_detection.rect.width * tmp_detection.rect.height;
 				cv::Rect intersection = tmp_detection.rect & obj_trackers_[j]->GetTrackedObject().rect;
 				if ( (intersection.width * intersection.height) > area*0.3 )
@@ -271,49 +290,65 @@ public:
 		//std::cout << "TRACKERS: " << obj_trackers_.size() << std::endl;
 
 		obj_detections_.clear();
+        ranges_.clear();
 
-		cv_tracker_msgs::image_obj_tracked ros_objects_msg;
-		ros_objects_msg.type = tracked_type_;
-		ros_objects_msg.total_num = num;
-		copy(rect_ranged_array.begin(), rect_ranged_array.end(), back_inserter(ros_objects_msg.rect_ranged)); // copy vector
-		copy(real_data.begin(), real_data.end(), back_inserter(ros_objects_msg.real_data)); // copy vector
-		copy(obj_id.begin(), obj_id.end(), back_inserter(ros_objects_msg.obj_id)); // copy vector
-		copy(lifespan.begin(), lifespan.end(), back_inserter(ros_objects_msg.lifespan)); // copy vector
+		cv_tracker_msgs::image_obj_tracked tmp_objects_msg;
 
-		ros_objects_msg.header = image_source.header;
+		tmp_objects_msg.type = tracked_type_;
+		tmp_objects_msg.total_num = num;
+		copy(rect_ranged_array.begin(), rect_ranged_array.end(), back_inserter(tmp_objects_msg.rect_ranged)); // copy vector
+		copy(real_data.begin(), real_data.end(), back_inserter(tmp_objects_msg.real_data)); // copy vector
+		copy(obj_id.begin(), obj_id.end(), back_inserter(tmp_objects_msg.obj_id)); // copy vector
+		copy(lifespan.begin(), lifespan.end(), back_inserter(tmp_objects_msg.lifespan)); // copy vector
 
-		publisher_tracked_objects_.publish(ros_objects_msg);
+		tmp_objects_msg.header = image_source.header;
+
+		ros_objects_msg_ = tmp_objects_msg;
+
+		//publisher_tracked_objects_.publish(ros_objects_msg);
 
 		//cv::imshow("KLT",image_track);
 		//cv::waitKey(1);
 
-		ready_ = false;
+		track_ready_ = true;
+		//ready_ = false;
+
+		publish_if_possible();
 
 	}
 
 	void detections_callback(cv_tracker_msgs::image_obj_ranged image_objects_msg)
 	{
-		if(ready_)
-			return;
-		unsigned int num = image_objects_msg.obj.size();
-		std::vector<cv_tracker_msgs::image_rect_ranged> objects = image_objects_msg.obj;
-		tracked_type_ = image_objects_msg.type;
-		//points are X,Y,W,H and repeat for each instance
-		obj_detections_.clear();
-
-		for (unsigned int i=0; i<num;i++)
+		//if(ready_)
+		//	return;
+		if (!detect_ready_)//must NOT overwrite, data is probably being used by tracking.
 		{
-			cv::Rect tmp;
-			tmp.x = objects.at(i).rect.x;
-			tmp.y = objects.at(i).rect.y;
-			tmp.width = objects.at(i).rect.width;
-			tmp.height = objects.at(i).rect.height;
-			obj_detections_.push_back(cv::LatentSvmDetector::ObjectDetection(tmp, 0));
-			ranges_.push_back(objects.at(i).range);
-			min_heights_.push_back(objects.at(i).min_height);
-			max_heights_.push_back(objects.at(i).max_height);
+			unsigned int num = image_objects_msg.obj.size();
+			std::vector<cv_tracker_msgs::image_rect_ranged> objects = image_objects_msg.obj;
+			tracked_type_ = image_objects_msg.type;
+			//points are X,Y,W,H and repeat for each instance
+			obj_detections_.clear();
+            ranges_.clear();
+            
+			for (unsigned int i=0; i<num;i++)
+			{
+				cv::Rect tmp;
+				tmp.x = objects.at(i).rect.x;
+				tmp.y = objects.at(i).rect.y;
+				tmp.width = objects.at(i).rect.width;
+				tmp.height = objects.at(i).rect.height;
+				ObjectDetection tmp_obj;
+				tmp_obj.rect=tmp; tmp_obj.score=0;
+				obj_detections_.push_back(tmp_obj);
+				ranges_.push_back(objects.at(i).range);
+				min_heights_.push_back(objects.at(i).min_height);
+				max_heights_.push_back(objects.at(i).max_height);
+			}
+			detect_ready_ = true;
 		}
-		ready_ = true;
+
+		publish_if_possible();
+		//ready_ = true;
 	}
 	/*void detections_callback(cv_tracker_msgs::image_obj image_objects_msg)
 	{
@@ -333,7 +368,7 @@ public:
 			tmp.y = objects.at(i).y;
 			tmp.width = objects.at(i).width;
 			tmp.height = objects.at(i).height;
-			obj_detections_.push_back(cv::LatentSvmDetector::ObjectDetection(tmp, 0));
+			obj_detections_.push_back(ObjectDetection(tmp, 0));
 		}
 		ready_ = true;
 	}*/
@@ -390,6 +425,8 @@ public:
 	{
 		ready_ = true;
 		num_trackers_ = 0;
+		track_ready_  = false;
+		detect_ready_ = false;
 	}
 
 };

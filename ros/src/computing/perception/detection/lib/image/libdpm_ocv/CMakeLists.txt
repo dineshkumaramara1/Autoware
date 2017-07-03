@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(libdpm_ocv)
+execute_process(
+  COMMAND rosversion -d
+  OUTPUT_VARIABLE ROS_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
+if ("${ROS_VERSION}" MATCHES "(indigo|jade)")
 find_package(catkin REQUIRED COMPONENTS
   std_msgs
   message_generation
@@ -23,8 +29,8 @@ SET(CMAKE_NVCC_FLAGS "-use_fast_math")
 
 catkin_package(
    INCLUDE_DIRS include/dpm_ocv
-   LIBRARIES dpm_ocv
-#  CATKIN_DEPENDS roscpp rospy std_msgs
+   LIBRARIES libdpm_ocv
+   CATKIN_DEPENDS message_runtime std_msgs
 #  DEPENDS system_lib
 )
 
@@ -133,3 +139,4 @@ INSTALL(
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
   FILES_MATCHING PATTERN "*.hpp"
 )
+endif()

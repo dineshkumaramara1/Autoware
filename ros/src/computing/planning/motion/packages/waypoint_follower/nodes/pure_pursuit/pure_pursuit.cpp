@@ -28,416 +28,118 @@
  *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <ros/ros.h>
-#include <std_msgs/String.h>
-#include <geometry_msgs/Twist.h>
-#include <geometry_msgs/TwistStamped.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
-#include <sensor_msgs/NavSatFix.h>
-#include <visualization_msgs/Marker.h>
-#include <std_msgs/Bool.h>
-#include <std_msgs/Float32.h>
-#include "runtime_manager/ConfigWaypointFollower.h"
-#include "waypoint_follower/libwaypoint_follower.h"
+#include "pure_pursuit.h"
 
-#define DEBUG //if you print debug code
-//#define LOG
-//#define GLOBAL
-
-static const int LOOP_RATE = 30; //Hz
-static const std::string MAP_FRAME = "map";
-//static const int MODE_WAYPOINT = 0;
-static const int MODE_DIALOG = 1;
-
-//parameter
-static bool _sim_mode = false;
-
-static geometry_msgs::PoseStamped _current_pose; // current pose by the global plane.
-static double _current_velocity;
-static double _prev_velocity = 0;
-
-static ros::Publisher _vis_pub;
-static ros::Publisher _stat_pub;
-static bool _waypoint_set = false;
-static bool _pose_set = false;
-
-//config topic
-static int _param_flag = 0; //0 = waypoint, 1 = Dialog
-static double _lookahead_threshold = 4.0; //meter
-static double _initial_velocity = 5.0; //km/h
-static double g_offset_base2sensor = 0;
-static double g_look_ahead_threshold_calc_ratio = 2.0;
-static double g_minimum_look_ahead_threshold = 6.0; // the next waypoint must be outside of this threshold.
-
-static WayPoints _current_waypoints;
-static ros::Publisher _traj_circle_pub;
-static ros::Publisher _target_pub;
-static ros::Publisher _search_pub;
-
-#ifdef DEBUG
-static ros::Publisher _line_point_pub;
-#endif
-
-static void ConfigCallback(const runtime_manager::ConfigWaypointFollowerConstPtr &config)
+namespace waypoint_follower
 {
-  _param_flag = config->param_flag;
-  _lookahead_threshold = config->lookahead_threshold;
-  _initial_velocity = config->velocity;
-  g_offset_base2sensor = config->offset;
-  g_look_ahead_threshold_calc_ratio = config->threshold_ratio;
-  g_minimum_look_ahead_threshold = config->minimum_lookahead_threshold;
+// Constructor
+PurePursuit::PurePursuit()
+  : RADIUS_MAX_(9e10)
+  , KAPPA_MIN_(1 / RADIUS_MAX_)
+  , is_linear_interpolation_(false)
+  , next_waypoint_number_(-1)
+  , lookahead_distance_(0)
+  , current_linear_velocity_(0)
+{
 }
 
-static void OdometryPoseCallback(const nav_msgs::OdometryConstPtr &msg)
+// Destructor
+PurePursuit::~PurePursuit()
 {
-  //std::cout << "odometry callback" << std::endl;
-
-  //
-  // effective for testing.
-  //
-  if (_sim_mode)
-  {
-    _current_velocity = msg->twist.twist.linear.x;
-    _current_pose.header = msg->header;
-    _current_pose.pose = msg->pose.pose;
-    _pose_set = true;
-  }
-
 }
 
-static void NDTCallback(const geometry_msgs::PoseStampedConstPtr &msg)
-{
-  if (!_sim_mode)
-  {
-    _current_pose.header = msg->header;
-    _current_pose.pose = msg->pose;
-    
-    geometry_msgs::Point base_link_point;
-    base_link_point.x = g_offset_base2sensor;
-    _current_pose.pose.position =  calcAbsoluteCoordinate(base_link_point,_current_pose.pose);
-    _pose_set = true;
-  }
-}
-
-static void estTwistCallback(const geometry_msgs::TwistStampedConstPtr &msg)
-{
-  if(!_sim_mode)
-  _current_velocity = msg->twist.linear.x;
-}
-
-static void WayPointCallback(const waypoint_follower::laneConstPtr &msg)
-{
-  _current_waypoints.setPath(*msg);
-  _waypoint_set = true;
-  ROS_INFO_STREAM("waypoint subscribed");
-}
-
-// display the next waypoint by markers.
-static void displayNextWaypoint(int i)
-{
-
-  visualization_msgs::Marker marker;
-  marker.header.frame_id = MAP_FRAME;
-  marker.header.stamp = ros::Time();
-  marker.ns = "next_waypoint_marker";
-  marker.id = 0;
-  marker.type = visualization_msgs::Marker::SPHERE;
-  marker.action = visualization_msgs::Marker::ADD;
-  marker.pose.position = _current_waypoints.getWaypointPosition(i);
-  marker.scale.x = 1.0;
-  marker.scale.y = 1.0;
-  marker.scale.z = 1.0;
-  marker.color.a = 1.0;
-  marker.color.r = 0.0;
-  marker.color.g = 0.0;
-  marker.color.b = 1.0;
-  marker.frame_locked = true;
-  _vis_pub.publish(marker);
-}
-
-// display the nexttarget by markers.
-static void displayNextTarget(geometry_msgs::Point target)
-{
-
-  visualization_msgs::Marker marker;
-  marker.header.frame_id = MAP_FRAME;
-  marker.header.stamp = ros::Time();
-  marker.ns = "next_target_marker";
-  marker.id = 0;
-  marker.type = visualization_msgs::Marker::SPHERE;
-  marker.action = visualization_msgs::Marker::ADD;
-  marker.pose.position = target;
-  std_msgs::ColorRGBA green;
-  green.a = 1.0;
-  green.b = 0.0;
-  green.r = 0.0;
-  green.g = 1.0;
-  marker.color = green;
-  marker.scale.x = 1.0;
-  marker.scale.y = 1.0;
-  marker.scale.z = 1.0;
-  marker.frame_locked = true;
-  _target_pub.publish(marker);
-}
-
-// display the locus of pure pursuit by markers.
-static void displayTrajectoryCircle(std::vector<geometry_msgs::Point> traj_circle_array)
-{
-  visualization_msgs::Marker traj_circle;
-  traj_circle.header.frame_id = MAP_FRAME;
-  traj_circle.header.stamp = ros::Time();
-  traj_circle.ns = "trajectory_circle_marker";
-  traj_circle.id = 0;
-  traj_circle.type = visualization_msgs::Marker::LINE_STRIP;
-  traj_circle.action = visualization_msgs::Marker::ADD;
-
-  std_msgs::ColorRGBA white;
-  white.a = 1.0;
-  white.b = 1.0;
-  white.r = 1.0;
-  white.g = 1.0;
-//
-  for (auto el : traj_circle_array)
-  for (std::vector<geometry_msgs::Point>::iterator it = traj_circle_array.begin(); it != traj_circle_array.end(); it++)
-  {
-    //traj_circle.points.push_back(*it);
-    traj_circle.points.push_back(el);
-    traj_circle.colors.push_back(white);
-  }
-
-  traj_circle.scale.x = 0.1;
-  traj_circle.color.a = 0.3;
-  traj_circle.color.r = 1.0;
-  traj_circle.color.g = 0.0;
-  traj_circle.color.b = 0.0;
-  traj_circle.frame_locked = true;
-  _traj_circle_pub.publish(traj_circle);
-}
-
-// display the search radius by markers.
-static void displaySearchRadius(double search_radius)
-{
-
-  visualization_msgs::Marker marker;
-  marker.header.frame_id = MAP_FRAME;
-  marker.header.stamp = ros::Time();
-  marker.ns = "next_target_marker";
-  marker.id = 0;
-  marker.type = visualization_msgs::Marker::SPHERE;
-  marker.action = visualization_msgs::Marker::ADD;
-  marker.pose.position = _current_pose.pose.position;
-  marker.scale.x = search_radius * 2;
-  marker.scale.y = search_radius * 2;
-  marker.scale.z = 1.0;
-  marker.color.a = 0.1;
-  marker.color.r = 1.0;
-  marker.color.g = 0.0;
-  marker.color.b = 0.0;
-  marker.frame_locked = true;
-  _search_pub.publish(marker);
-}
-#ifdef DEBUG
-// debug tool for interpolateNextTarget
-static void displayLinePoint(double slope, double intercept, geometry_msgs::Point target, geometry_msgs::Point target2,
-    geometry_msgs::Point target3)
-{
-  visualization_msgs::Marker line;
-  line.header.frame_id = MAP_FRAME;
-  line.header.stamp = ros::Time();
-  line.ns = "line_marker";
-  line.id = 0;
-  line.type = visualization_msgs::Marker::LINE_STRIP;
-  line.action = visualization_msgs::Marker::ADD;
-
-  std_msgs::ColorRGBA white;
-  white.a = 1.0;
-  white.b = 1.0;
-  white.r = 1.0;
-  white.g = 1.0;
-
-  for (int i = -1000000; i < 1000000;)
-  {
-    geometry_msgs::Point p;
-    p.x = i;
-    p.y = slope * i + intercept;
-    p.z = _current_pose.pose.position.z;
-    line.points.push_back(p);
-    i += 10000;
-  }
-
-  line.scale.x = 0.3;
-  line.color = white;
-  line.frame_locked = true;
-  _line_point_pub.publish(line);
-
-  visualization_msgs::Marker marker;
-  marker.header.frame_id = MAP_FRAME;
-  marker.header.stamp = ros::Time();
-  marker.ns = "target_marker";
-  marker.id = 0;
-  marker.type = visualization_msgs::Marker::SPHERE_LIST;
-  marker.action = visualization_msgs::Marker::ADD;
-  //marker.pose.position = target;
-  marker.points.push_back(target);
-  std_msgs::ColorRGBA green;
-  green.a = 1.0;
-  green.b = 0.0;
-  green.r = 0.0;
-  green.g = 1.0;
-  marker.colors.push_back(green);
-  marker.points.push_back(target2);
-  std_msgs::ColorRGBA yellow;
-  yellow.a = 1.0;
-  yellow.b = 0.0;
-  yellow.r = 1.0;
-  yellow.g = 1.0;
-  marker.colors.push_back(yellow);
-  marker.points.push_back(target3);
-  std_msgs::ColorRGBA color;
-  color.a = 1.0;
-  color.b = 1.0;
-  color.r = 0.0;
-  color.g = 1.0;
-  marker.colors.push_back(color);
-
-  marker.scale.x = 1.0;
-  marker.scale.y = 1.0;
-  marker.scale.z = 1.0;
-  marker.frame_locked = true;
-  _line_point_pub.publish(marker);
-}
-#endif
-
-static double getCmdVelocity(int waypoint)
-{
-
-  if (_param_flag)
-  {
-    ROS_INFO_STREAM("dialog : " << _initial_velocity << " km/h (" << kmph2mps(_initial_velocity) << " m/s )");
-    return kmph2mps(_initial_velocity);
-  }
-
-  if (_current_waypoints.isEmpty())
-  {
-    ROS_INFO_STREAM("waypoint : not loaded path");
-    return 0;
-  }
-
-  double velocity = _current_waypoints.getWaypointVelocityMPS(waypoint);
-  ROS_INFO_STREAM("waypoint : " << mps2kmph(velocity) << " km/h ( " << velocity << "m/s )");
-  return velocity;
-}
-
-static double getLookAheadThreshold(int waypoint)
-{
-  if (_param_flag)
-    return _lookahead_threshold;
-
-  // double current_velocity_mps = _current_waypoints.getWaypointVelocityMPS(waypoint);
-  double current_velocity_mps = _current_velocity;
-
-  if (current_velocity_mps * g_look_ahead_threshold_calc_ratio < g_minimum_look_ahead_threshold)
-    return g_minimum_look_ahead_threshold;
-  else
-    return current_velocity_mps * g_look_ahead_threshold_calc_ratio;
-}
-
-static double calcCurvature(geometry_msgs::Point target)
+double PurePursuit::calcCurvature(geometry_msgs::Point target) const
 {
   double kappa;
-  double denominator = pow(getPlaneDistance(target, _current_pose.pose.position), 2);
-  double numerator = 2 * calcRelativeCoordinate(target, _current_pose.pose).y;
+  double denominator = pow(getPlaneDistance(target, current_pose_.position), 2);
+  double numerator = 2 * calcRelativeCoordinate(target, current_pose_).y;
 
   if (denominator != 0)
     kappa = numerator / denominator;
   else
-    kappa = 0;
-
-  //ROS_INFO("kappa : %lf", kappa);
+  {
+    if (numerator > 0)
+      kappa = KAPPA_MIN_;
+    else
+      kappa = -KAPPA_MIN_;
+  }
+  ROS_INFO("kappa : %lf", kappa);
   return kappa;
-
 }
 
-static double calcRadius(geometry_msgs::Point target)
+// linear interpolation of next target
+bool PurePursuit::interpolateNextTarget(int next_waypoint, geometry_msgs::Point *next_target) const
 {
-  double radius;
-  double denominator = 2 * calcRelativeCoordinate(target, _current_pose.pose).y;
-  double numerator = pow(getPlaneDistance(target, _current_pose.pose.position), 2);
+  constexpr double ERROR = pow(10, -5);  // 0.00001
 
-  if (denominator != 0)
-    radius = numerator / denominator;
-  else
-    radius = 0;
-
-  //ROS_INFO("radius : %lf", radius);
-  return radius;
-}
-
-//linear interpolation of next target
-static bool interpolateNextTarget(int next_waypoint, double search_radius, geometry_msgs::Point *next_target)
-{
+  int path_size = static_cast<int>(current_waypoints_.size());
+  if (next_waypoint == path_size - 1)
+  {
+    *next_target = current_waypoints_.at(next_waypoint).pose.pose.position;
+    return true;
+  }
+  double search_radius = lookahead_distance_;
   geometry_msgs::Point zero_p;
-  geometry_msgs::Point end = _current_waypoints.getWaypointPosition(next_waypoint);
-  geometry_msgs::Point start = _current_waypoints.getWaypointPosition(next_waypoint - 1);
+  geometry_msgs::Point end = current_waypoints_.at(next_waypoint).pose.pose.position;
+  geometry_msgs::Point start = current_waypoints_.at(next_waypoint - 1).pose.pose.position;
 
-  //let the linear equation be "y = slope * x + intercept"
-  double slope = 0;
-  double intercept = 0;
-  getLinearEquation(start,end,&slope, &intercept);
+  // let the linear equation be "ax + by + c = 0"
+  // if there are two points (x1,y1) , (x2,y2), a = "y2-y1, b = "(-1) * x2 - x1" ,c = "(-1) * (y2-y1)x1 + (x2-x1)y1"
+  double a = 0;
+  double b = 0;
+  double c = 0;
+  double get_linear_flag = getLinearEquation(start, end, &a, &b, &c);
+  if (!get_linear_flag)
+    return false;
 
-  //let the center of circle be "(x0,y0)", in my code , the center of circle is vehicle position
-  //the distance  "d" between the foot of a perpendicular line and the center of circle is ...
-  //    | y0 - slope * x0 - intercept |
-  //d = -------------------------------
-  //          √( 1 + slope^2)
-  double d = fabs(_current_pose.pose.position.y - slope * _current_pose.pose.position.x - intercept)
-      / sqrt(1 + pow(slope, 2));
+  // let the center of circle be "(x0,y0)", in my code , the center of circle is vehicle position
+  // the distance  "d" between the foot of a perpendicular line and the center of circle is ...
+  //    | a * x0 + b * y0 + c |
+  // d = -------------------------------
+  //          √( a~2 + b~2)
+  double d = getDistanceBetweenLineAndPoint(current_pose_.position, a, b, c);
 
-  //ROS_INFO("slope : %lf ", slope);
-  //ROS_INFO("intercept : %lf ", intercept);
-  //ROS_INFO("distance : %lf ", d);
+  // ROS_INFO("a : %lf ", a);
+  // ROS_INFO("b : %lf ", b);
+  // ROS_INFO("c : %lf ", c);
+  // ROS_INFO("distance : %lf ", d);
 
   if (d > search_radius)
     return false;
 
-  //unit vector of point 'start' to point 'end'
+  // unit vector of point 'start' to point 'end'
   tf::Vector3 v((end.x - start.x), (end.y - start.y), 0);
   tf::Vector3 unit_v = v.normalize();
 
-  //normal unit vectors of v
-  tf::Vector3 unit_w1 = rotateUnitVector(unit_v, 90); //rotate to counter clockwise 90 degree
-  tf::Vector3 unit_w2 = rotateUnitVector(unit_v, -90); //rotate to counter clockwise 90 degree
+  // normal unit vectors of v
+  tf::Vector3 unit_w1 = rotateUnitVector(unit_v, 90);   // rotate to counter clockwise 90 degree
+  tf::Vector3 unit_w2 = rotateUnitVector(unit_v, -90);  // rotate to counter clockwise 90 degree
 
-  //the foot of a perpendicular line
+  // the foot of a perpendicular line
   geometry_msgs::Point h1;
-  h1.x = _current_pose.pose.position.x + d * unit_w1.getX();
-  h1.y = _current_pose.pose.position.y + d * unit_w1.getY();
-  h1.z = _current_pose.pose.position.z;
+  h1.x = current_pose_.position.x + d * unit_w1.getX();
+  h1.y = current_pose_.position.y + d * unit_w1.getY();
+  h1.z = current_pose_.position.z;
 
   geometry_msgs::Point h2;
-  h2.x = _current_pose.pose.position.x + d * unit_w2.getX();
-  h2.y = _current_pose.pose.position.y + d * unit_w2.getY();
-  h2.z = _current_pose.pose.position.z;
+  h2.x = current_pose_.position.x + d * unit_w2.getX();
+  h2.y = current_pose_.position.y + d * unit_w2.getY();
+  h2.z = current_pose_.position.z;
 
-  double error = pow(10, -5); //0.00001
+  // ROS_INFO("error : %lf", error);
+  // ROS_INFO("whether h1 on line : %lf", h1.y - (slope * h1.x + intercept));
+  // ROS_INFO("whether h2 on line : %lf", h2.y - (slope * h2.x + intercept));
 
-  //ROS_INFO("error : %lf", error);
-  //ROS_INFO("whether h1 on line : %lf", h1.y - (slope * h1.x + intercept));
-  //ROS_INFO("whether h2 on line : %lf", h2.y - (slope * h2.x + intercept));
-
-  //check which of two foot of a perpendicular line is on the line equation
+  // check which of two foot of a perpendicular line is on the line equation
   geometry_msgs::Point h;
-  if (fabs(h1.y - (slope * h1.x + intercept)) < error)
+  if (fabs(a * h1.x + b * h1.y + c) < ERROR)
   {
     h = h1;
- //   ROS_INFO("use h1");
+    //   ROS_INFO("use h1");
   }
-  else if (fabs(h2.y - (slope * h2.x + intercept)) < error)
+  else if (fabs(a * h2.x + b * h2.y + c) < ERROR)
   {
- //   ROS_INFO("use h2");
+    //   ROS_INFO("use h2");
     h = h2;
   }
   else
@@ -445,8 +147,8 @@ static bool interpolateNextTarget(int next_waypoint, double search_radius, geome
     return false;
   }
 
-  //get intersection[s]
-  //if there is a intersection
+  // get intersection[s]
+  // if there is a intersection
   if (d == search_radius)
   {
     *next_target = h;
@@ -454,300 +156,112 @@ static bool interpolateNextTarget(int next_waypoint, double search_radius, geome
   }
   else
   {
-    //if there are two intersection
-    //get intersection in front of vehicle
+    // if there are two intersection
+    // get intersection in front of vehicle
     double s = sqrt(pow(search_radius, 2) - pow(d, 2));
     geometry_msgs::Point target1;
     target1.x = h.x + s * unit_v.getX();
     target1.y = h.y + s * unit_v.getY();
-    target1.z = _current_pose.pose.position.z;
+    target1.z = current_pose_.position.z;
 
     geometry_msgs::Point target2;
     target2.x = h.x - s * unit_v.getX();
     target2.y = h.y - s * unit_v.getY();
-    target2.z = _current_pose.pose.position.z;
+    target2.z = current_pose_.position.z;
 
-    //ROS_INFO("target1 : ( %lf , %lf , %lf)", target1.x, target1.y, target1.z);
-    //ROS_INFO("target2 : ( %lf , %lf , %lf)", target2.x, target2.y, target2.z);
-    displayLinePoint(slope, intercept, target1, target2, h); //debug tool
+    // ROS_INFO("target1 : ( %lf , %lf , %lf)", target1.x, target1.y, target1.z);
+    // ROS_INFO("target2 : ( %lf , %lf , %lf)", target2.x, target2.y, target2.z);
+    // displayLinePoint(a, b, c, target1, target2, h);  // debug tool
 
-    //check intersection is between end and start
-    double interval = getPlaneDistance(end,start);
+    // check intersection is between end and start
+    double interval = getPlaneDistance(end, start);
     if (getPlaneDistance(target1, end) < interval)
     {
-      //ROS_INFO("result : target1");
+      // ROS_INFO("result : target1");
       *next_target = target1;
       return true;
     }
     else if (getPlaneDistance(target2, end) < interval)
     {
-
-      //ROS_INFO("result : target2");
+      // ROS_INFO("result : target2");
       *next_target = target2;
       return true;
     }
     else
     {
-      //ROS_INFO("result : false ");
+      // ROS_INFO("result : false ");
       return false;
     }
   }
 }
 
-static bool getNextTarget(double closest_waypoint , geometry_msgs::Point *next_target)
+void PurePursuit::getNextWaypoint()
 {
-#ifdef GLOBAL
-  static int next_waypoint = -1;
-#else
-  int next_waypoint = -1;
-#endif
-  int path_size = static_cast<int>(_current_waypoints.getSize());
-  double lookahead_threshold = getLookAheadThreshold(closest_waypoint);
-  ROS_INFO("initilize threshold = %lf", lookahead_threshold);
+  int path_size = static_cast<int>(current_waypoints_.size());
 
   // if waypoints are not given, do nothing.
-  if (_current_waypoints.isEmpty())
+  if (path_size == 0)
   {
-    next_waypoint = -1;
-    ROS_INFO_STREAM("next waypoint = " << next_waypoint << "/" << path_size - 1);
-    return false;
+    next_waypoint_number_ = -1;
+    return;
   }
 
   // look for the next waypoint.
-  int i = closest_waypoint;
-  while (i < path_size)
+  for (int i = 0; i < path_size; i++)
   {
-
-    //if search waypoint is the last
+    // if search waypoint is the last
     if (i == (path_size - 1))
     {
       ROS_INFO("search waypoint is the last");
-      next_waypoint = i;
-      break;
+      next_waypoint_number_ = i;
+      return;
     }
 
     // if there exists an effective waypoint
-    if (getPlaneDistance(_current_waypoints.getWaypointPosition(i), _current_pose.pose.position) > lookahead_threshold)
+    if (getPlaneDistance(current_waypoints_.at(i).pose.pose.position, current_pose_.position) > lookahead_distance_)
     {
-
-      //param flag is dialog
-      if (_param_flag == MODE_DIALOG)
-      {
-        next_waypoint = i;
-        break;
-      }
-
-      //param flag is waypoint
-      //    if (evaluateLocusFitness(closest_waypoint, i))
-      // {
-      //    ROS_INFO("evaluate : OK");
-        next_waypoint = i;
-        break;
-
+      next_waypoint_number_ = i;
+      return;
     }
-    i++;
   }
 
-  if (next_waypoint != -1)
+  // if this program reaches here , it means we lost the waypoint!
+  next_waypoint_number_ = -1;
+  return;
+}
+
+bool PurePursuit::canGetCurvature(double *output_kappa)
+{
+  // search next waypoint
+  getNextWaypoint();
+  if (next_waypoint_number_ == -1)
   {
-    ROS_INFO("threshold = %lf", lookahead_threshold);
-    ROS_INFO_STREAM("next waypoint = " << next_waypoint << "/" << path_size - 1);
-    displayNextWaypoint(next_waypoint);
-    displaySearchRadius(lookahead_threshold);
+    ROS_INFO("lost next waypoint");
+    return false;
+  }
 
-    //if next waypoint is the last
-    if (next_waypoint == (path_size - 1) || next_waypoint == 0){
-    	*next_target = _current_waypoints.getWaypointPosition(next_waypoint);
-      return true;
-    }
-
-    if(!interpolateNextTarget(next_waypoint, lookahead_threshold, next_target))
-    	return false;
-    
-#ifdef LOG
-    std::ofstream ofs("/tmp/pure_pursuit.log", std::ios::app);
-    ofs << _current_waypoints.getWaypointPosition(next_waypoint).x << " "
-    << _current_waypoints.getWaypointPosition(next_waypoint).y << " " << next_target.x << " " << next_target.y
-    << std::endl;
-#endif
-
+  // if is_linear_interpolation_ is false or next waypoint is first or last
+  if (!is_linear_interpolation_ || next_waypoint_number_ == 0 ||
+      next_waypoint_number_ == (static_cast<int>(current_waypoints_.size() - 1)))
+  {
+    next_target_position_ = current_waypoints_.at(next_waypoint_number_).pose.pose.position;
+    *output_kappa = calcCurvature(next_target_position_);
     return true;
   }
 
-  // if the program reaches here, it means we lost the waypoint.
-  return false;
-}
+  // linear interpolation and calculate angular velocity
+  bool interpolation = interpolateNextTarget(next_waypoint_number_, &next_target_position_);
 
-static geometry_msgs::Twist calcTwist(double curvature, double cmd_velocity)
-{
-  geometry_msgs::Twist twist;
-
-  twist.linear.x = cmd_velocity;
-  twist.angular.z = _current_velocity * curvature;
-  //twist.angular.z = cmd_velocity * curvature;
-  return twist;
-}
-
-//generate the locus of pure pursuit
-static std::vector<geometry_msgs::Point> generateTrajectoryCircle(geometry_msgs::Point target)
-{
-  std::vector<geometry_msgs::Point> traj_circle_array;
-  double radius = calcRadius(target);
-
-  for (double i = 0; i < M_PI / 2; i += 0.1)
+  if (!interpolation)
   {
-    //calc a point of circumference
-    geometry_msgs::Point p;
-    p.x = radius * cos(i);
-    p.y = radius * sin(i);
-
-    //transform to (radius,0)
-    geometry_msgs::Point relative_p;
-    relative_p.x = p.x - radius;
-    relative_p.y = p.y;
-
-    //rotate -90°
-    geometry_msgs::Point rotate_p = rotatePoint(relative_p,-90);
-
-    //transform to vehicle plane
-    geometry_msgs::Point tf_p = calcAbsoluteCoordinate(rotate_p, _current_pose.pose);
-
-    traj_circle_array.push_back(tf_p);
+    ROS_INFO_STREAM("lost target! ");
+    return false;
   }
 
-  //reverse vector
-  std::reverse(traj_circle_array.begin(), traj_circle_array.end());
+  // ROS_INFO("next_target : ( %lf , %lf , %lf)", next_target.x, next_target.y,next_target.z);
 
-  for (double i = 0; i > (-1) * M_PI / 2; i -= 0.1)
-  {
-    //calc a point of circumference
-    geometry_msgs::Point p;
-    p.x = radius * cos(i);
-    p.y = radius * sin(i);
-
-    //transform to (radius,0)
-    geometry_msgs::Point relative_p;
-    relative_p.x = p.x - radius;
-    relative_p.y = p.y;
-
-    //rotate -90°
-    geometry_msgs::Point rotate_p = rotatePoint(relative_p,-90);
-
-    //transform to vehicle plane
-    geometry_msgs::Point tf_p = calcAbsoluteCoordinate(rotate_p, _current_pose.pose);
-
-    traj_circle_array.push_back(tf_p);
-  }
-
-  return traj_circle_array;
-
+  *output_kappa = calcCurvature(next_target_position_);
+  return true;
 }
 
-int main(int argc, char **argv)
-{
-  ROS_INFO_STREAM("pure pursuit start");
-
-  // set up ros
-  ros::init(argc, argv, "pure_pursuit");
-
-  ros::NodeHandle nh;
-  ros::NodeHandle private_nh("~");
-
-  // setting params
-  private_nh.getParam("sim_mode", _sim_mode);
-  ROS_INFO_STREAM("sim_mode : " << _sim_mode);
-
-  //publish topic
-  ros::Publisher cmd_velocity_publisher = nh.advertise<geometry_msgs::TwistStamped>("twist_raw", 10);
-  _vis_pub = nh.advertise<visualization_msgs::Marker>("next_waypoint_mark", 0);
-  _stat_pub = nh.advertise<std_msgs::Bool>("wf_stat", 0);
-  _target_pub = nh.advertise<visualization_msgs::Marker>("next_target_mark", 0);
-  _search_pub = nh.advertise<visualization_msgs::Marker>("search_circle_mark", 0);
-#ifdef DEBUG
-  _line_point_pub = nh.advertise<visualization_msgs::Marker>("line_point_mark", 0); //debug tool
-#endif
-  _traj_circle_pub = nh.advertise<visualization_msgs::Marker>("trajectory_circle_mark", 0);
-
-  //subscribe topic
-  ros::Subscriber waypoint_subcscriber = nh.subscribe("final_waypoints", 10, WayPointCallback);
-  // ros::Subscriber waypoint_subcscriber = nh.subscribe("safety_waypoint", 10, WayPointCallback);
-  ros::Subscriber odometry_subscriber = nh.subscribe("odom_pose", 10, OdometryPoseCallback);
-  ros::Subscriber ndt_subscriber = nh.subscribe("control_pose", 10, NDTCallback);
-  ros::Subscriber est_twist_subscriber = nh.subscribe("estimate_twist", 10, estTwistCallback);
-  ros::Subscriber config_subscriber = nh.subscribe("config/waypoint_follower", 10, ConfigCallback);
-
-  geometry_msgs::TwistStamped twist;
-  ros::Rate loop_rate(LOOP_RATE); // by Hz
-
-  while (ros::ok())
-  {
-    std_msgs::Bool wf_stat;
-
-    ros::spinOnce();
-
-    //check topic
-    if (_waypoint_set == false || _pose_set == false)
-    {
-      ROS_INFO_STREAM("topic waiting...");
-      loop_rate.sleep();
-      continue;
-    }
-    geometry_msgs::Point next_target;
-#ifdef GLOBAL
-    //get closest waypoint
-    int closest_waypoint = getClosestWaypoint(_current_waypoints.getCurrentWaypoints(), _current_pose.pose);
-    ROS_INFO_STREAM("closest waypoint = " << closest_waypoint);
-
-    //if can get closest waypoint
-    if (closest_waypoint > 0)
-    {
-
-      //get next target
-    	if (geometry_msgs::Point next_target = getNextTarget(closest_waypoint){
-#else
-		if (getNextTarget(0, &next_target)) {
-#endif
-
-			ROS_INFO("next_target : ( %lf , %lf , %lf)", next_target.x,
-					next_target.y, next_target.z);
-			displayNextTarget(next_target);
-			displayTrajectoryCircle(generateTrajectoryCircle(next_target));
-#ifdef GLOBAL
-			twist.twist = calcTwist(calcCurvature(next_target), getCmdVelocity(closest_waypoint));
-#else
-			twist.twist = calcTwist(calcCurvature(next_target),
-					getCmdVelocity(0));
-#endif
-			wf_stat.data = true;
-			_stat_pub.publish(wf_stat);
-		} else {
-			ROS_INFO_STREAM("lost target! ");
-			wf_stat.data = false;
-			_stat_pub.publish(wf_stat);
-			twist.twist.linear.x = 0;
-			twist.twist.angular.z = 0;
-		}
-#ifdef GLOBAL
-    }
-    else //cannot get closest
-    {
-      ROS_INFO_STREAM("closest waypoint cannot detected !!");
-      wf_stat.data = false;
-      _stat_pub.publish(wf_stat);
-      twist.twist.linear.x = 0;
-      twist.twist.angular.z = 0;
-    }
-#endif
-
-    ROS_INFO_STREAM(
-        "twist(linear.x , angular.z) = ( " << twist.twist.linear.x << " , " << twist.twist.angular.z << " )");
-
-    twist.header.stamp = ros::Time::now();
-    cmd_velocity_publisher.publish(twist);
-    _prev_velocity = twist.twist.linear.x;
-    loop_rate.sleep();
-    //count++;
-  }
-
-  return 0;
-}
+}  // waypoint_follower

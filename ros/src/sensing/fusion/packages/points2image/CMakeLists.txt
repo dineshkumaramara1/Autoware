@@ -4,7 +4,6 @@ project(points2image)
 include(FindPkgConfig)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
-  rosinterface
   std_msgs
   sensor_msgs
   fastvirtualscan
@@ -13,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   pcl_ros
   pcl_conversions
+  calibration_camera_lidar
 )
 
 find_package(OpenCV REQUIRED)
@@ -39,7 +39,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES camera_lidar3d
-   CATKIN_DEPENDS rosinterface
+   CATKIN_DEPENDS rosinterface calibration_camera_lidar message_runtime std_msgs sensor_msgs
 #  DEPENDS system_lib
 )
 
@@ -47,7 +47,7 @@ catkin_package(
 ## Build ##
 ###########
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall -Wno-unused-result ${CMAKE_CXX_FLAGS}")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall ${CMAKE_CXX_FLAGS}")
 
 EXECUTE_PROCESS(
   COMMAND pkg-config --variable=host_bins Qt5Core
@@ -119,6 +119,7 @@ target_link_libraries(points2image
 add_dependencies(points2image
   points_image
   points2image_generate_messages_cpp
+  calibration_camera_lidar_generate_messages_cpp
 )
 
 # vscan2image
@@ -130,7 +131,8 @@ target_link_libraries(vscan2image
 )
 add_dependencies(vscan2image
   points_image
-  point2image_generate_messages_cpp
+  points2image_generate_messages_cpp
+  calibration_camera_lidar_generate_messages_cpp
 )
 
 

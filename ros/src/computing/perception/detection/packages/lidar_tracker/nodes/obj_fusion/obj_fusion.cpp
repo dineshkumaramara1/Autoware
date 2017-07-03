@@ -1,191 +1,274 @@
-#include <ros/ros.h>
 #include <cv_tracker_msgs/obj_label.h>
-#include <lidar_tracker_msgs/centroids.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
-#include <geometry_msgs/Point.h>
-#include <math.h>
 #include <float.h>
+#include <geometry_msgs/Point.h>
+#include <jsk_recognition_msgs/BoundingBox.h>
+#include <jsk_recognition_msgs/BoundingBoxArray.h>
+#include <lidar_tracker/CloudCluster.h>
+#include <lidar_tracker/CloudClusterArray.h>
+#include <math.h>
+#include <mutex>
+#include <ros/ros.h>
+#include <std_msgs/Time.h>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
+
+/* flag for comfirming whether multiple topics are received */
+static bool isReady_obj_label;
+static bool isReady_cluster_centroids;
 
 static constexpr uint32_t SUBSCRIBE_QUEUE_SIZE = 100;
 static constexpr uint32_t ADVERTISE_QUEUE_SIZE = 10;
 static constexpr bool ADVERTISE_LATCH = false;
+static constexpr double LOOP_RATE = 15.0;
 
 ros::Publisher obj_pose_pub;
+ros::Publisher obj_pose_timestamp_pub;
+ros::Publisher cluster_class_pub;
 
-static std::vector<geometry_msgs::Point> reprojected_positions;
 static std::string object_type;
-
+static std::vector<geometry_msgs::Point> centroids;
+static std_msgs::Header sensor_header;
+static std::vector<lidar_tracker::CloudCluster> v_cloud_cluster;
+static ros::Time obj_pose_timestamp;
+static double threshold_min_dist;
 static tf::StampedTransform transform;
 
+struct obj_label_t {
+  std::vector<geometry_msgs::Point> reprojected_positions;
+  std::vector<int> obj_id;
+};
+
+obj_label_t obj_label;
+
+/* mutex to handle objects from within multi thread safely */
+std::mutex mtx_flag_obj_label;
+std::mutex mtx_flag_cluster_centroids;
+std::mutex mtx_reprojected_positions;
+std::mutex mtx_centroids;
+#define LOCK(mtx) (mtx).lock()
+#define UNLOCK(mtx) (mtx).unlock()
+
 static double euclid_distance(const geometry_msgs::Point pos1,
-                              const geometry_msgs::Point pos2)
-{
-    return sqrt(pow(pos1.x - pos2.x, 2) +
-                pow(pos1.y - pos2.y, 2) +
-                pow(pos1.z - pos2.z, 2));
+                              const geometry_msgs::Point pos2) {
+  return sqrt(pow(pos1.x - pos2.x, 2) + pow(pos1.y - pos2.y, 2) +
+              pow(pos1.z - pos2.z, 2));
 
 } /* static double distance() */
 
+/* fusion reprojected position and pointcloud centroids */
+static void fusion_objects(void) {
+  obj_label_t obj_label_current;
+  std::vector<lidar_tracker::CloudCluster> v_cloud_cluster_current;
+  std_msgs::Header header = sensor_header;
+  std::vector<geometry_msgs::Point> centroids_current;
 
-void obj_label_cb(const cv_tracker_msgs::obj_label& obj_label_msg)
-{
-    object_type = obj_label_msg.type;
-    reprojected_positions.clear();
+  LOCK(mtx_reprojected_positions);
+  copy(obj_label.reprojected_positions.begin(),
+       obj_label.reprojected_positions.end(),
+       back_inserter(obj_label_current.reprojected_positions));
+  copy(obj_label.obj_id.begin(), obj_label.obj_id.end(),
+       back_inserter(obj_label_current.obj_id));
+  UNLOCK(mtx_reprojected_positions);
 
-    visualization_msgs::MarkerArray test;
-    std_msgs::ColorRGBA color_green;
-    color_green.r = 0.0f;
-    color_green.g = 1.0f;
-    color_green.b = 0.0f;
-    color_green.a = 1.0f;
-    for (const auto& point : obj_label_msg.reprojected_pos)
-        {
-            reprojected_positions.push_back(point);
-        }
+  LOCK(mtx_centroids);
+  copy(centroids.begin(), centroids.end(), back_inserter(centroids_current));
+  copy(v_cloud_cluster.begin(), v_cloud_cluster.end(),
+       back_inserter(v_cloud_cluster_current));
+  UNLOCK(mtx_centroids);
+
+  if (centroids_current.empty() ||
+      obj_label_current.reprojected_positions.empty() ||
+      obj_label_current.obj_id.empty()) {
+    jsk_recognition_msgs::BoundingBoxArray pub_msg;
+    pub_msg.header = header;
+    std_msgs::Time time;
+    obj_pose_pub.publish(pub_msg);
+    lidar_tracker::CloudClusterArray cloud_clusters_msg;
+    cloud_clusters_msg.header = header;
+    cluster_class_pub.publish(cloud_clusters_msg);
+
+    time.data = obj_pose_timestamp;
+    obj_pose_timestamp_pub.publish(time);
+    return;
+  }
+
+  std::vector<int> obj_indices;
+
+  for (unsigned int i = 0; i < obj_label_current.obj_id.size(); ++i) {
+    unsigned int min_idx = 0;
+    double min_distance = DBL_MAX;
+
+    /* calculate each euclid distance between reprojected position and centroids
+     */
+    for (unsigned int j = 0; j < centroids_current.size(); j++) {
+      double distance =
+          euclid_distance(obj_label_current.reprojected_positions.at(i),
+                          centroids_current.at(j));
+
+      /* Nearest centroid correspond to this reprojected object */
+      if (distance < min_distance) {
+        min_distance = distance;
+        min_idx = j;
+      }
+    }
+    if (min_distance < threshold_min_dist) {
+      obj_indices.push_back(min_idx);
+    } else {
+      obj_indices.push_back(-1);
+    }
+  }
+
+  /* Publish marker with centroids coordinates */
+  jsk_recognition_msgs::BoundingBoxArray pub_msg;
+  pub_msg.header = header;
+  lidar_tracker::CloudClusterArray cloud_clusters_msg;
+  cloud_clusters_msg.header = header;
+
+  for (unsigned int i = 0; i < obj_label_current.obj_id.size(); ++i) {
+    jsk_recognition_msgs::BoundingBox bounding_box;
+    if (obj_indices.at(i) == -1)
+      continue;
+
+    v_cloud_cluster_current.at(obj_indices.at(i)).label = object_type;
+
+    if (object_type == "car") {
+      v_cloud_cluster_current.at(obj_indices.at(i)).bounding_box.label = 0;
+    } else if (object_type == "person") {
+      v_cloud_cluster_current.at(obj_indices.at(i)).bounding_box.label = 1;
+    } else {
+      v_cloud_cluster_current.at(obj_indices.at(i)).bounding_box.label = 2;
+      v_cloud_cluster_current.at(obj_indices.at(i)).label = "unknown";
+    }
+    v_cloud_cluster_current.at(obj_indices.at(i)).bounding_box.value =
+        obj_label_current.obj_id.at(i);
+    bounding_box = v_cloud_cluster_current.at(obj_indices.at(i)).bounding_box;
+    pub_msg.boxes.push_back(bounding_box);
+    cloud_clusters_msg.clusters.push_back(
+        v_cloud_cluster_current.at(obj_indices.at(i)));
+  }
+
+  obj_pose_pub.publish(pub_msg);
+  cluster_class_pub.publish(cloud_clusters_msg);
+  std_msgs::Time time;
+  time.data = obj_pose_timestamp;
+  obj_pose_timestamp_pub.publish(time);
+}
+
+void obj_label_cb(const cv_tracker_msgs::obj_label &obj_label_msg) {
+  object_type = obj_label_msg.type;
+  obj_pose_timestamp = obj_label_msg.header.stamp;
+
+  LOCK(mtx_reprojected_positions);
+  obj_label.reprojected_positions.clear();
+  obj_label.obj_id.clear();
+  UNLOCK(mtx_reprojected_positions);
+
+  LOCK(mtx_reprojected_positions);
+  for (unsigned int i = 0; i < obj_label_msg.obj_id.size(); ++i) {
+    obj_label.reprojected_positions.push_back(
+        obj_label_msg.reprojected_pos.at(i));
+    obj_label.obj_id.push_back(obj_label_msg.obj_id.at(i));
+  }
+  UNLOCK(mtx_reprojected_positions);
+
+  /* confirm obj_label is subscribed */
+  LOCK(mtx_flag_obj_label);
+  isReady_obj_label = true;
+  UNLOCK(mtx_flag_obj_label);
+
+  /* Publish fusion result if both of topics are ready */
+  if (isReady_obj_label && isReady_cluster_centroids) {
+    fusion_objects();
+
+    LOCK(mtx_flag_obj_label);
+    isReady_obj_label = false;
+    UNLOCK(mtx_flag_obj_label);
+
+    LOCK(mtx_flag_cluster_centroids);
+    isReady_cluster_centroids = false;
+    UNLOCK(mtx_flag_cluster_centroids);
+  }
 
 } /* void obj_label_cb() */
 
+void cluster_centroids_cb(
+    const lidar_tracker::CloudClusterArray::Ptr &in_cloud_cluster_array_ptr) {
+  LOCK(mtx_centroids);
+  centroids.clear();
+  v_cloud_cluster.clear();
+  UNLOCK(mtx_centroids);
 
-void cluster_centroids_cb(const lidar_tracker_msgs::centroids& cluster_centroids_msg)
-{
-    std::vector<geometry_msgs::Point> centroids;
+  LOCK(mtx_centroids);
+  static tf::TransformListener trf_listener;
+  try {
+    trf_listener.lookupTransform("map", "velodyne", ros::Time(0), transform);
+    for (int i(0); i < (int)in_cloud_cluster_array_ptr->clusters.size(); ++i) {
+      lidar_tracker::CloudCluster cloud_cluster =
+          in_cloud_cluster_array_ptr->clusters.at(i);
+      /* convert centroids coodinate from velodyne frame to map frame */
+      tf::Vector3 pt(cloud_cluster.centroid_point.point.x,
+                     cloud_cluster.centroid_point.point.y,
+                     cloud_cluster.centroid_point.point.z);
+      tf::Vector3 converted = transform * pt;
+      sensor_header = cloud_cluster.header;
+      v_cloud_cluster.push_back(cloud_cluster);
+      geometry_msgs::Point point_in_map;
+      point_in_map.x = converted.x();
+      point_in_map.y = converted.y();
+      point_in_map.z = converted.z();
 
-    for (const auto& point : cluster_centroids_msg.points)
-        {
-            /* convert centroids coodinate from velodyne frame to map frame */
-            tf::Vector3 pt(point.x, point.y, point.z);
-            tf::Vector3 converted = transform * pt;
-
-            geometry_msgs::Point point_in_map;
-            point_in_map.x = converted.x();
-            point_in_map.y = converted.y();
-            point_in_map.z = converted.z();
-
-            centroids.push_back(point_in_map);
-        }
-
-    if (centroids.empty() || reprojected_positions.empty()) {
-        return;
+      centroids.push_back(point_in_map);
     }
+  } catch (tf::TransformException ex) {
+    ROS_INFO("%s", ex.what());
+    ros::Duration(1.0).sleep();
+  }
+  UNLOCK(mtx_centroids);
 
-    std::vector<unsigned int> obj_indices;
-    for(const auto& reproj_pos : reprojected_positions)
-        {
-            unsigned int min_idx      = 0;
-            double       min_distance = DBL_MAX;
+  LOCK(mtx_flag_cluster_centroids);
+  isReady_cluster_centroids = true;
+  UNLOCK(mtx_flag_cluster_centroids);
 
-            /* calculate each euclid distance between reprojected position and centroids */
-            for (unsigned int i=0; i<centroids.size(); i++)
-                {
-                    double distance = euclid_distance(reproj_pos, centroids.at(i));
+  /* Publish fusion result if both of topics are ready */
+  if (isReady_obj_label && isReady_cluster_centroids) {
+    fusion_objects();
 
-                    /* Nearest centroid correspond to this reprojected object */
-                    if (distance < min_distance)
-                        {
-                            min_distance = distance;
-                            min_idx      = i;
-                        }
-                }
-            obj_indices.push_back(min_idx);
-        }
+    LOCK(mtx_flag_obj_label);
+    isReady_obj_label = false;
+    UNLOCK(mtx_flag_obj_label);
 
-    /* Publish marker with centroids coordinates */
-    visualization_msgs::MarkerArray pub_msg;
-
-    std_msgs::ColorRGBA color_red;
-    color_red.r = 1.0f;
-    color_red.g = 0.0f;
-    color_red.b = 0.0f;
-    color_red.a = 1.0f;
-
-    std_msgs::ColorRGBA color_blue;
-    color_blue.r = 0.0f;
-    color_blue.g = 0.0f;
-    color_blue.b = 1.0f;
-    color_blue.a = 1.0f;
-
-    std_msgs::ColorRGBA color_green;
-    color_green.r = 0.0f;
-    color_green.g = 1.0f;
-    color_green.b = 0.0f;
-    color_green.a = 1.0f;
-
-    for (const auto& idx : obj_indices)
-        {
-            visualization_msgs::Marker marker;
-
-            /*Set the frame ID */
-            marker.header.frame_id = "map";
-
-            /* Set the namespace and id for this marker */
-            marker.ns = object_type;
-            marker.id = idx;
-
-            /* Set the marker type */
-            marker.type = visualization_msgs::Marker::SPHERE;
-
-            /* Set the pose of the marker */
-            marker.pose.position = centroids.at(idx);
-            marker.pose.orientation.x = 0.0;
-            marker.pose.orientation.y = 0.0;
-            marker.pose.orientation.y = 0.0;
-            marker.pose.orientation.w = 0.0;
-
-            /* Set the scale of the marker -- We assume object as 1.5m sphere */
-            marker.scale.x = (double)1.5;
-            marker.scale.y = (double)1.5;
-            marker.scale.z = (double)1.5;
-
-            /* Set the color */
-            if (object_type == "car") {
-                marker.color = color_blue;
-            }
-            else if (object_type == "person") {
-                marker.color = color_green;
-            }
-            else {
-                marker.color = color_red;
-            }
-
-            marker.lifetime = ros::Duration(0.3);
-
-            pub_msg.markers.push_back(marker);
-        }
-
-       obj_pose_pub.publish(pub_msg);
-
+    LOCK(mtx_flag_cluster_centroids);
+    isReady_cluster_centroids = false;
+    UNLOCK(mtx_flag_cluster_centroids);
+  }
 
 } /* void cluster_centroids_cb() */
 
+int main(int argc, char *argv[]) {
+  /* ROS initialization */
+  ros::init(argc, argv, "obj_fusion");
 
-int main(int argc, char* argv[])
-{
-    /* ROS initialization */
-    ros::init(argc, argv, "obj_fusion");
+  ros::NodeHandle n;
+  ros::NodeHandle private_n("~");
 
-    ros::NodeHandle n;
+  if (!private_n.getParam("min_dist", threshold_min_dist)) {
+    threshold_min_dist = 2.0;
+  }
+  /* Initialize flags */
+  isReady_obj_label = false;
+  isReady_cluster_centroids = false;
 
-    ros::Subscriber obj_label_sub         = n.subscribe("obj_label", SUBSCRIBE_QUEUE_SIZE, obj_label_cb);
-    ros::Subscriber cluster_centroids_sub = n.subscribe("/cluster_centroids", SUBSCRIBE_QUEUE_SIZE, cluster_centroids_cb);
-    obj_pose_pub = n.advertise<visualization_msgs::MarkerArray>("obj_pose", ADVERTISE_QUEUE_SIZE, ADVERTISE_LATCH);
+  ros::Subscriber obj_label_sub =
+      n.subscribe("obj_label", SUBSCRIBE_QUEUE_SIZE, obj_label_cb);
+  ros::Subscriber cluster_centroids_sub = n.subscribe(
+      "/cloud_clusters", SUBSCRIBE_QUEUE_SIZE, cluster_centroids_cb);
+  obj_pose_pub = n.advertise<jsk_recognition_msgs::BoundingBoxArray>(
+      "obj_pose", ADVERTISE_QUEUE_SIZE, ADVERTISE_LATCH);
+  cluster_class_pub = n.advertise<lidar_tracker::CloudClusterArray>(
+      "/cloud_clusters_class", ADVERTISE_QUEUE_SIZE);
+  obj_pose_timestamp_pub =
+      n.advertise<std_msgs::Time>("obj_pose_timestamp", ADVERTISE_QUEUE_SIZE);
+  ros::spin();
 
-    tf::TransformListener trf_listener;
-
-    while (n.ok())
-        {
-            try {
-                trf_listener.lookupTransform("map", "velodyne", ros::Time(0), transform);
-            }
-            catch (tf::TransformException ex) {
-                ROS_INFO("%s", ex.what());
-                ros::Duration(1.0).sleep();
-            }
-
-            ros::spinOnce();
-        }
-
-    return 0;
+  return 0;
 }

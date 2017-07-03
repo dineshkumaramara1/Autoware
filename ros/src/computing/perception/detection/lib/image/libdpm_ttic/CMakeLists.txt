@@ -20,8 +20,8 @@ catkin_package(
   LIBRARIES dpm_ttic
 )
 
-SET(CMAKE_C_FLAGS "-O2 -g -Wall -Wno-unused-result -DROS ${CMAKE_C_FLAGS}")
-SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall -Wno-unused-result -DROS ${CMAKE_CXX_FLAGS}")
+SET(CMAKE_C_FLAGS "-O2 -g -Wall -Wno-unused-result ${CMAKE_C_FLAGS}")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall -Wno-unused-result ${CMAKE_CXX_FLAGS}")
 
 IF(CUDA_FOUND)
 INCLUDE_DIRECTORIES(
@@ -47,7 +47,7 @@ ADD_LIBRARY(libdpm_ttic
   ${DPM_TTIC_CPU_IMPL_SOURCES}
   ${DPM_TTIC_GPU_IMPL_SOURCES}
 )
-SET_TARGET_PROPERTIES(libdpm_ttic PROPERTIES OUTPUT_NAME dpm_ttic)
+#SET_TARGET_PROPERTIES(libdpm_ttic PROPERTIES OUTPUT_NAME dpm_ttic)
 
 TARGET_LINK_LIBRARIES(libdpm_ttic
   ${catkin_LIBRARIES}

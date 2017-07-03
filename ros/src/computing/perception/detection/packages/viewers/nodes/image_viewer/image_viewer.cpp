@@ -33,7 +33,12 @@
 
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
+#include <opencv2/core/version.hpp>
+#if (CV_MAJOR_VERSION == 3)
+#include "gencolors.cpp"
+#else
 #include <opencv2/contrib/contrib.hpp>
+#endif
 
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
@@ -284,18 +289,22 @@ int main(int argc, char **argv)
 	ros::NodeHandle n;
 	ros::NodeHandle private_nh("~");
 
-	std::string image_node;
+	std::string image_topic_name;
 
-	if (private_nh.getParam("image_node", image_node)) {
-		ROS_INFO("Setting image node to %s", image_node.c_str());
+	if (private_nh.getParam("image_raw_topic", image_topic_name)) {
+		ROS_INFO("Setting image topic to %s", image_topic_name.c_str());
 	} else {
-		ROS_INFO("No image node received, defaulting to image_raw, you can use _image_node:=YOUR_NODE");
-		image_node = "/image_raw";
+		ROS_INFO("No image topic received, defaulting to image_raw, you can use _image_raw_topic:=YOUR_NODE");
+		image_topic_name = "/image_raw";
 	}
 
+#if (CV_MAJOR_VERSION == 3)
+	generateColors(_colors, 25);
+#else
 	cv::generateColors(_colors, 25);
+#endif
 
-	ros::Subscriber scriber = n.subscribe(image_node, 1, image_viewer_callback);
+	ros::Subscriber scriber = n.subscribe(image_topic_name, 1, image_viewer_callback);
 
 	ros::Subscriber scriber_car = n.subscribe("/obj_car/image_obj", 1,
 						image_obj_update_cb);

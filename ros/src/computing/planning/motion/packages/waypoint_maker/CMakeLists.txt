@@ -8,8 +8,9 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   vehicle_socket
   waypoint_follower
+  waypoint_follower_msgs
   runtime_manager
-  map_file
+  vector_map
   lane_planner
 )
 
@@ -19,39 +20,37 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES lane_follower
-  CATKIN_DEPENDS roscpp std_msgs tf vehicle_socket waypoint_follower runtime_manager map_file lane_planner
-  DEPENDS gnss waypoint_follower
+  CATKIN_DEPENDS roscpp std_msgs tf vehicle_socket waypoint_follower waypoint_follower_msgs runtime_manager vector_map lane_planner
+  DEPENDS gnss
 )
 
 ###########
 ## Build ##
 ###########
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall -Wno-unused-result -DROS ${CMAKE_CXX_FLAGS}")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -O2 -g -Wall ${CMAKE_CXX_FLAGS}")
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(waypoint_loader nodes/waypoint_loader/waypoint_loader.cpp)
+add_executable(waypoint_loader nodes/waypoint_loader/waypoint_loader_core nodes/waypoint_loader/waypoint_loader_node.cpp)
 target_link_libraries(waypoint_loader ${catkin_LIBRARIES})
 add_dependencies(waypoint_loader
-  waypoint_follower_generate_messages_cpp
+  waypoint_follower_msgs_generate_messages_cpp
   runtime_manager_generate_messages_cpp)
 
 add_executable(waypoint_saver nodes/waypoint_saver/waypoint_saver.cpp)
 target_link_libraries(waypoint_saver ${catkin_LIBRARIES})
 add_dependencies(waypoint_saver
-  waypoint_follower_generate_messages_cpp
+  waypoint_follower_msgs_generate_messages_cpp
   vehicle_socket_generate_messages_cpp)
 
 add_executable(waypoint_clicker nodes/waypoint_clicker/waypoint_clicker.cpp)
 target_link_libraries(waypoint_clicker ${catkin_LIBRARIES})
-add_dependencies(waypoint_clicker
-  map_file_generate_messages_cpp)
 
 add_executable(waypoint_marker_publisher nodes/waypoint_marker_publisher/waypoint_marker_publisher.cpp)
 target_link_libraries(waypoint_marker_publisher ${catkin_LIBRARIES})
 add_dependencies(waypoint_marker_publisher
-  waypoint_follower_generate_messages_cpp
+  waypoint_follower_msgs_generate_messages_cpp
   runtime_manager_generate_messages_cpp)

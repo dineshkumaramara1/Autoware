@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(calibration_camera_lidar)
+execute_process(
+  COMMAND rosversion -d
+  OUTPUT_VARIABLE ROS_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
 include(FindPkgConfig)
 include(FindLibXml2)
@@ -35,11 +40,11 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES camera
-   CATKIN_DEPENDS glviewer rosinterface
-  DEPENDS calibration_camera_lidar_generate_messages_cpp
+   CATKIN_DEPENDS glviewer rosinterface std_msgs message_runtime
+#  DEPENDS system_lib
 )
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -O2 -Wall -g -Wno-unused-result ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "-std=c++11 -O2 -Wall -g ${CMAKE_CXX_FLAGS}")
 
 EXECUTE_PROCESS(
   COMMAND pkg-config --variable=host_bins Qt5Core
@@ -82,12 +87,12 @@ add_custom_target(selectionwidget_moc
 )
 
 ## Declare a cpp library
+if ("${ROS_VERSION}" MATCHES "(indigo|jade|kinetic)")
 add_library(calibrationtoolkit
   CalibrationToolkit/calibrationtoolkit.cpp
   CalibrationToolkit/selectionwidget.cpp
 )
 add_dependencies(calibrationtoolkit
-  glviewer
   calibrationtoolkit_moc
   selectionwidget_moc
 )
@@ -129,8 +134,10 @@ include_directories(
   ${Qt5Widgets_INCLUDE_DIRS}
   ${Qt5OpenGL_INCLUDE_DIRS}
 )
+endif()
 
 ## 2D
+if ("${ROS_VERSION}" MATCHES "(indigo|jade|kinetic)")
 add_executable(calibration_test
   nodes/calibration_test/chessboard.cpp
   nodes/calibration_test/trans.cpp
@@ -148,8 +155,9 @@ set_target_properties(calibration_test
 
 target_link_libraries(calibration_test
    ${catkin_LIBRARIES} ${OpenCV_LIBS} xml2)
-
+endif()
 ## 3D
+if ("${ROS_VERSION}" MATCHES "(indigo|jade|kinetic)")
 add_executable(calibration_toolkit
   nodes/calibration_toolkit/main.cpp
   nodes/calibration_toolkit/mainwindow.cpp
@@ -178,7 +186,7 @@ target_link_libraries(calibration_toolkit
   ${Qt5Widgets_LIBRARIES}
   ${Qt5OpenGL_LIBRARIES}
 )
-
+endif()
 # calibration_publisher
 add_executable(calibration_publisher
   nodes/calibration_publisher/calibration_publisher.cpp

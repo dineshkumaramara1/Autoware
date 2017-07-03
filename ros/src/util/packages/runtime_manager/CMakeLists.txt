@@ -12,18 +12,26 @@ find_package(OpenCV REQUIRED)
 add_message_files(
   FILES
   ConfigRcnn.msg
+  ConfigSsd.msg
   ConfigCarDpm.msg
   ConfigPedestrianDpm.msg
   ConfigNdt.msg
   ConfigNdtMapping.msg
   ConfigNdtMappingOutput.msg
+  ConfigICP.msg
+  ConfigVoxelGridFilter.msg
+  ConfigRingFilter.msg
+  ConfigDistanceFilter.msg
+  ConfigRandomFilter.msg
   ConfigWaypointFollower.msg
   ConfigTwistFilter.msg
   ConfigVelocitySet.msg
+  ConfigLatticeVelocitySet.msg
   ConfigCarKf.msg
   ConfigPedestrianKf.msg
   ConfigLaneRule.msg
   ConfigLaneSelect.msg
+  ConfigLaneStop.msg
   ConfigPoints2Polygon.msg
   accel_cmd.msg
   steer_cmd.msg
